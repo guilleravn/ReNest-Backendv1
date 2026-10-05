@@ -40,9 +40,11 @@ npm run test:cov             # unit tests with coverage
 
 ## Hard rules
 
-Plan first; commits grouped by functionality/area with their docs and tests, made directly by QA
-(no approval step); no AI attribution; **never `git push`** unless asked at that moment. Details:
-[docs/conventions/git-workflow.md](docs/conventions/git-workflow.md).
+Sync with `origin` before starting or resuming work; branch off the latest `develop`, never
+`main`; plan first; commits grouped by functionality/area with their docs and tests, made
+directly by QA (no approval step); no AI attribution; **never `git push`** unless asked at that
+moment. One PR per Linear ticket, targeting `develop`, needs CI green and 1 approval to merge.
+Details: [docs/conventions/git-workflow.md](docs/conventions/git-workflow.md).
 
 ## Docs
 

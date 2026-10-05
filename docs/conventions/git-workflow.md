@@ -1,5 +1,20 @@
 # Git workflow
 
+## 0. Branches and syncing
+
+- `main` is never touched directly: no commits, no merges, no pushes to it.
+- `develop` is the integration branch. Every feature/fix branch starts from `develop`, and every
+  PR targets `develop`.
+- Branch naming: `<type>/<linear-code>-<short-slug>` (e.g. `feat/bo-27-listing-status-filter`),
+  using the same `<type>` values as commits.
+- **Before starting any work** (new branch, resuming a branch, or opening a PR): fetch and check
+  whether the remote has commits not yet in the local branch (`git fetch origin` then compare with
+  `git log HEAD..origin/<branch>`). Always branch off the latest `origin/develop`, never a stale
+  local copy.
+- If syncing finds a conflict between remote changes and local uncommitted work, **stop and ask
+  the user** how to handle their local changes (stash, commit first, discard) — never resolve that
+  silently.
+
 ## 1. Plan first
 
 Anything non-trivial starts in plan mode: agree on the scope, the slices and the affected docs
@@ -70,3 +85,14 @@ Rules:
 
 **Never `git push`** unless explicitly asked at that moment. A generic "you can always push" does
 not count, and permission to commit is not permission to push.
+
+## 6. Pull requests
+
+- **One PR per Linear ticket in this repo**, grouping every commit made for that ticket. If the
+  ticket also needs work in the other repo, that's a separate PR there — link the ticket, not the
+  other PR.
+- PR target is always `develop`. PR title references the Linear code (e.g.
+  `[BO-27] Add listing status filter`); the description summarizes the change and links the ticket.
+- CI (`.github/workflows/ci.yml`) runs lint, format check, typecheck and tests automatically on
+  every PR into `develop` — it does not run on plain pushes to feature branches. A PR cannot merge
+  until CI passes and at least one collaborator (not the author) approves it.
