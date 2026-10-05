@@ -12,4 +12,4 @@ npm run prisma:generate   # generate the Prisma client
 npm run start:dev
 ```
 
-See [CLAUDE.md](CLAUDE.md) for commands and project rules, and [docs/](docs/) for conventions, business invariants and architecture.
+See [CLAUDE.md](CLAUDE.md) for commands and project rules, and [docs/README.md](docs/README.md) for the docs index (conventions, business and security rules, architecture).
