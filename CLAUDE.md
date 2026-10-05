@@ -1,37 +1,14 @@
 # CLAUDE.md
 
-## Language
+ReNest Backend is the REST API for ReNest, an item rental platform (frontend in the separate
+`ReNest-Frontend` repo). Just bootstrapped: the domain and data model are defined feature by
+feature, so **do not invent tables, rules or endpoints** the issue/plan does not define.
 
-All code, comments, commit messages and docs are written in **English**, even when the conversation happens in Spanish.
+Stack: Node 24, TypeScript (strict, ESM), NestJS 12, Prisma 7 + PostgreSQL 17 (Docker), Vitest +
+Supertest, oxlint + Prettier. Versions: [docs/architecture.md](docs/architecture.md#stack--current-state).
 
-## What this is
-
-ReNest Backend is the REST API for ReNest, an item rental platform. The frontend lives in a separate repo (`ReNest-Frontend`). The project was just bootstrapped: the domain and the data model are still being defined feature by feature.
-
-## Stack — current state
-
-This is a **living** section. Update it in the same commit as any change to dependencies, versions or infrastructure. It describes what is installed, not what is planned.
-
-| Area | Choice | Version | Notes |
-|---|---|---|---|
-| Runtime | Node.js | 24.x | |
-| Language | TypeScript | 6.0 | `strict`, ESM (`"type": "module"`, `nodenext`) |
-| Framework | NestJS | 12.1 | `@nestjs/platform-express` |
-| API style | REST | — | |
-| ORM | Prisma | 7.10 | `prisma` CLI + `@prisma/client` pinned to the same version |
-| DB driver | `@prisma/adapter-pg` + `pg` | 7.10 / 8.x | Prisma 7 requires a driver adapter at runtime |
-| Database | PostgreSQL | 17 (Docker, local) | `docker-compose.yml` |
-| Auth | Own implementation | — | **Not implemented yet** |
-| Job queue | None | — | |
-| Tests | Vitest + Supertest | 4.1 / 7.x | |
-| Lint / format | oxlint (type-aware) / Prettier | 1.x / 3.x | |
-
-Prisma specifics:
-- Config lives in `prisma.config.ts` (loads `.env` via `dotenv`). Schema in `prisma/schema.prisma`, migrations in `prisma/migrations/`.
-- The client is generated into `generated/prisma/` (gitignored). Import from there, not from `@prisma/client`. Run `npm run prisma:generate` after install and after every schema change.
-- Do not install `prisma@latest` blindly: as of 2026-10 the npm `latest` tag points to an 8.0 RC. Keep CLI and client on the same stable version.
-
-**Data model: not yet defined.** No entities exist. Do not invent tables; they get added slice by slice as features are agreed.
+All code, comments, commit messages and docs are in **English**, even when the conversation is in
+Spanish.
 
 ## Commands
 
@@ -41,6 +18,8 @@ cp .env.example .env         # local config; never commit .env
 
 npm run db:up                # start local Postgres (Docker)
 npm run db:down              # stop it
+npm run docker:up            # build + start Postgres AND the API in Docker (:3000)
+npm run docker:down          # stop both — needed for ReNest-Frontend's e2e against a real backend
 npm run prisma:generate      # regenerate the Prisma client
 npm run prisma:migrate       # create + apply a migration (dev)
 npm run prisma:deploy        # apply pending migrations (CI/prod)
@@ -51,33 +30,26 @@ npm run build                # compile to dist/
 npm run start:prod           # run compiled build
 
 npm run lint                 # oxlint --type-aware
+npm run typecheck            # tsc --noEmit
 npm run format               # prettier
+npm run format:check         # prettier check (pre-commit)
 npm test                     # unit tests (*.spec.ts)
 npm run test:e2e             # e2e tests (test/*.e2e-spec.ts)
 npm run test:cov             # unit tests with coverage
 ```
 
-## Non-negotiable process rules
+## Hard rules
 
-1. **Plan before implementing** anything non-trivial (plan mode). Agree on the plan, then build.
-2. **Commit per slice**, never everything at the end. A slice is not done until the docs it affects are updated **in the same commit**.
-3. **Never `git push`** unless the user explicitly asks for it at that moment. A generic "you can always push" does not count.
-4. **Show the full commit message in chat and wait for approval** before committing.
-5. **No AI attribution in commits**: no `Co-Authored-By`, no "Generated with".
-6. **Secrets never go in the repo or in a prompt**: API keys, connection strings, JWT secrets. They live in `.env` (gitignored); `.env.example` holds placeholders only.
-7. **Money**: the domain does not handle money yet. The moment it does, amounts are **integer minor units (cents) end to end**, never floats (see `docs/conventions/coding-style.md`).
-8. **Schema source of truth**: there is no separate ERD yet, so `prisma/schema.prisma` is the source of truth. If an ERD is added under `docs/reference/`, any Prisma schema change must update the ERD in the same slice.
+Plan first; commits grouped by functionality/area with their docs and tests, made directly by QA
+(no approval step); no AI attribution; **never `git push`** unless asked at that moment. Details:
+[docs/conventions/git-workflow.md](docs/conventions/git-workflow.md).
 
-## Where to look
+## Docs
 
-| Question | Doc |
-|---|---|
-| Is this business rule real? What does it protect? | [docs/rules/business-invariants.md](docs/rules/business-invariants.md) |
-| Does logic go in the controller, DTO, guard or service? | [docs/conventions/coding-style.md](docs/conventions/coding-style.md) |
-| Which module owns this entity? | [docs/conventions/coding-style.md](docs/conventions/coding-style.md) |
-| Does this need a transaction? | [docs/conventions/coding-style.md](docs/conventions/coding-style.md) |
-| How do I throw errors to the client? | [docs/conventions/coding-style.md](docs/conventions/coding-style.md) |
-| What needs a unit / e2e / concurrency test? | [docs/conventions/testing.md](docs/conventions/testing.md) |
-| What is a slice? How do I structure a commit? | [docs/conventions/git-workflow.md](docs/conventions/git-workflow.md) |
-| Auth, tokens, input validation rules | [docs/rules/business-invariants.md](docs/rules/business-invariants.md#security-invariants) |
-| How is this deployed / what runs in production? | [docs/architecture.md](docs/architecture.md) |
+Start at [docs/README.md](docs/README.md): it says which file to read for each kind of change.
+**Read only the docs relevant to the current task**, never all of them. The docs are split by
+topic so you can load just what you need (e.g. a DTO change → api-design; a schema change →
+database). Most used: [modules-and-layers](docs/conventions/modules-and-layers.md),
+[api-design](docs/conventions/api-design.md), [database](docs/conventions/database.md),
+[testing](docs/conventions/testing.md), [security](docs/rules/security.md),
+[business-invariants](docs/rules/business-invariants.md).
