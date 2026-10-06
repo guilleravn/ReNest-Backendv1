@@ -1,6 +1,6 @@
 # ReNest Backend
 
-REST API for ReNest, an item rental platform. Built with NestJS, Prisma and PostgreSQL.
+REST API for ReNest, a C2C marketplace for buying and selling secondhand items in LatAm. Built with NestJS, Prisma and PostgreSQL.
 
 ## Getting started
 

@@ -7,7 +7,7 @@ QA checks every change against it. Each item links to the doc with the full rule
    `generated/prisma` ([coding-style.md](coding-style.md#esm-imports)).
 2. `import type` of a service or DTO → broken DI/validation with no compile error
    ([coding-style.md](coding-style.md#esm-imports)).
-3. Accepting `ownerId`/`userId`/`role`/`status` from the body ([api-design.md](api-design.md#dtos-and-validation)).
+3. Accepting `sellerId`/`buyerId`/`userId`/`role`/`status` from the body ([api-design.md](api-design.md#dtos-and-validation)).
 4. Checking only authentication and not ownership (IDOR) on `GET/PATCH/DELETE /:id`
    ([security.md](../rules/security.md)).
 5. Returning the full Prisma object (with `passwordHash` or other internal fields)

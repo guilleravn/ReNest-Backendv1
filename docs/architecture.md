@@ -14,7 +14,7 @@ or infrastructure. It describes what is installed, not what is planned.
 | ORM | Prisma | 7.10 | `prisma` CLI + `@prisma/client` pinned to the same version |
 | DB driver | `@prisma/adapter-pg` + `pg` | 7.10 / 8.x | Prisma 7 requires a driver adapter at runtime |
 | Database | PostgreSQL | 17 (Docker, local) | `docker-compose.yml` |
-| Auth | Own implementation | — | **Not implemented yet** |
+| Auth | Own JWT (`@nestjs/jwt`) + argon2/bcrypt, login only | — | **Not implemented yet.** Design: [security.md](rules/security.md#auth-design-mvp) |
 | Job queue | None | — | |
 | Tests | Vitest + Supertest | 4.1 / 7.x | |
 | Lint / format | oxlint (type-aware) / Prettier | 1.x / 3.x | |
@@ -53,7 +53,7 @@ keep using `npm run db:up` + `npm run start:dev` (faster feedback loop, no rebui
 **Not decided.** Hosting, CI/CD, environments and monitoring are TBD. When decided, document here:
 - Deploy shape (platform, how the API and DB are hosted, how migrations run: `npm run prisma:deploy` as a release step).
 - Environments (dev / staging / prod) and where their config/secrets live.
-- Background jobs, if a feature needs them (e.g. rental reminders, expirations) and which queue.
+- Background jobs, if a feature needs them, and which queue.
 - What to monitor: health endpoint, error rate, latency, DB connections, failed jobs.
 
 Do not add infrastructure to this doc until it actually exists or has been agreed.

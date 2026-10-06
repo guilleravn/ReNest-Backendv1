@@ -6,21 +6,21 @@ evolution. How errors are thrown inside the code: [error-handling.md](error-hand
 ## Routes
 
 Plural kebab-case nouns; the HTTP verb says the action. At most 2 levels of nesting, and only for
-real ownership (`/items/:itemId/photos`); if the child has its own identity, also expose it flat
-(`/rentals/:rentalId`). Query params filter, sort and paginate, never identify
-(✅ `/items/42` · ❌ `/items?id=42`).
+real ownership (`/listings/:listingId/photos`); if the child has its own identity, also expose it flat
+(`/reservations/:reservationId`). Query params filter, sort and paginate, never identify
+(✅ `/listings/42` · ❌ `/listings?id=42`).
 
 | Operation | Method + route | Success |
 |---|---|---|
-| List | `GET /items` | `200` + page |
-| Read | `GET /items/:itemId` | `200` |
-| Create | `POST /items` | `201` + created resource (includes `id`) |
-| Partial update | `PATCH /items/:itemId` | `200` + resource |
-| Full replace (rare) | `PUT /items/:itemId` | `200` |
-| Delete | `DELETE /items/:itemId` | `204` no body |
-| Business action | `POST /rentals/:rentalId/cancel` | `200` + resource, or `204` |
+| List | `GET /listings` | `200` + page |
+| Read | `GET /listings/:listingId` | `200` |
+| Create | `POST /listings` | `201` + created resource (includes `id`) |
+| Partial update | `PATCH /listings/:listingId` | `200` + resource |
+| Full replace (rare) | `PUT /listings/:listingId` | `200` |
+| Delete | `DELETE /listings/:listingId` | `204` no body |
+| Business action | `POST /reservations/:reservationId/confirm-handover` | `200` + resource, or `204` |
 
-❌ `/getItems`, `/items/create`, a `GET` that changes state, `200` with `{ error: true }`.
+❌ `/getListings`, `/listings/create`, a `GET` that changes state, `200` with `{ error: true }`.
 
 ## Error status codes
 
@@ -38,7 +38,7 @@ real ownership (`/items/:itemId/photos`); if the child has its own identity, als
 **Error body**: Nest's standard shape, identical on every endpoint:
 
 ```json
-{ "statusCode": 404, "message": "Item not found", "error": "Not Found" }
+{ "statusCode": 404, "message": "Listing not found", "error": "Not Found" }
 ```
 
 On validation errors `message` is an array of strings. A future global filter may **add** fields
@@ -56,9 +56,10 @@ Installed (`class-validator` + `class-transformer`) with the first endpoint.
   `@Min`/`@Max`, enums with `@IsEnum`, dates with `@IsISO8601`/`@IsDateString`.
 - `UpdateXDto extends PartialType(CreateXDto)` (from `@nestjs/mapped-types`, or `@nestjs/swagger`
   if Swagger is installed).
-- Query params: their own DTO (`ListItemsQueryDto`) with `@Type(() => Number)` where needed.
-- **Never** accept server-decided fields from the body: `id`, `ownerId`, `userId`, `role`,
-  `status`, `createdAt`, computed totals. The owner comes from `@CurrentUser()`.
+- Query params: their own DTO (`ListListingsQueryDto`) with `@Type(() => Number)` where needed.
+- **Never** accept server-decided fields from the body: `id`, `sellerId`, `buyerId`, `userId`,
+  `role`, `status`, `createdAt`, computed totals. The acting user (seller or buyer) comes from
+  `@CurrentUser()`.
 - Response: return a safe, explicit shape (Prisma `select` or mapping to `XResponseDto`).
   ⚠️ `@Exclude()` + `ClassSerializerInterceptor` do **not** work on plain Prisma objects; do not
   rely on them to hide `passwordHash`.
