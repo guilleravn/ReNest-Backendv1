@@ -3,10 +3,30 @@
 Mandatory security invariants, then how to apply them in this codebase. Read for any change that
 touches auth, endpoints, user input, secrets, logging of user data or uploads.
 
+## Auth design (MVP)
+
+Agreed by the team; **not implemented yet** (story A9 · Log in with email and password). Keep it
+this small: anything beyond it needs a new decision.
+
+- **Login only**, for accounts created by the seed. No sign-up, password reset, social login,
+  refresh tokens or token revocation in the MVP. There is no fake/switchable "current user".
+- `POST /auth/login` (public) checks email + password and returns `{ accessToken }`: a JWT signed
+  with `@nestjs/jwt`, carrying the user id (`sub`). `GET /auth/me` returns the current user.
+  (Proposed contract: confirm it in the plan of the login story.)
+- **One access token, ~7 days** (`JWT_EXPIRES_IN`), so the session survives closing the browser.
+  Without refresh tokens, a short expiry would log users out constantly; the accepted trade-off is
+  that a stolen token stays valid until it expires. Logout is done by the frontend deleting its
+  cookie.
+- The token never reaches browser JavaScript: the frontend server stores it in an httpOnly cookie
+  and sends it as `Authorization: Bearer` (see ReNest-Frontend `docs/architecture.md`).
+- **Swappable boundary**: only `AuthModule` knows how users authenticate. The rest of the code
+  depends on the global guard, `@Public()` and `@CurrentUser()`, so moving to an external provider
+  (planned with sign-up in R2) only replaces `AuthModule`.
+
 ## Security invariants
 
-Auth is implemented in-house and **does not exist yet**. These rules apply from the auth slice
-onwards. Entry format: see [business-invariants.md](business-invariants.md#format).
+These rules apply from the auth slice onwards. Entry format: see
+[business-invariants.md](business-invariants.md#format).
 
 ### Passwords are never stored in plain text
 - **Requires**: hash with a slow password hash (argon2 or bcrypt) before persisting; the hash never appears in any API response.
@@ -14,7 +34,8 @@ onwards. Entry format: see [business-invariants.md](business-invariants.md#forma
 - **Fails as**: leaked DB → every user's password exposed.
 
 ### Tokens are signed with a secret from the environment
-- **Requires**: JWT secret and expiry read from env (`.env`, never committed); tokens have a short expiry.
+- **Requires**: JWT secret and expiry read from env (`.env`, never committed); expiry as agreed in
+  [Auth design](#auth-design-mvp).
 - **Protects**: nobody can forge a valid token.
 - **Fails as**: a committed or hardcoded secret → anyone can mint tokens for any user.
 
@@ -47,10 +68,23 @@ onwards. Entry format: see [business-invariants.md](business-invariants.md#forma
 - **Passwords**: argon2 or bcrypt; never in responses or logs. Login returns the same message for
   "user does not exist" and "wrong password".
 - **Secrets** (API keys, connection strings, JWT secrets) never go in the repo or in a prompt: only
-  in `.env` (gitignored); `.env.example` holds placeholders only. JWT with short expiry.
+  in `.env` (gitignored); `.env.example` holds placeholders only.
 - **HTTP** (when the API is exposed): `helmet`, CORS with an allowlist from `CORS_ORIGINS`
   (❌ `app.enableCors()` without options in prod), global `@nestjs/throttler`, stricter on login.
 - **External input** (webhooks, third-party APIs) is untrusted: validate it and verify signatures.
 - **Uploads**: validate type/size; generated file name (`randomUUID()`), never the original one.
 - **Logging**: never log credentials, tokens or whole user objects (see
   [error-handling.md](../conventions/error-handling.md#logging)).
+
+## Evaluated and rejected
+
+- **External provider (Firebase Auth / Auth0 / Clerk)**: users would live in two places (provider
+  and Postgres) and the seed would have to sync both; it needs accounts and secrets per
+  environment and a provider or emulator for e2e tests. Too much setup for a one-week MVP with
+  login only. Reconsider with sign-up (R2), behind the `AuthModule` boundary.
+- **Server-side sessions in Nest**: the browser never calls the API directly (it goes through the
+  Next.js server), so a Nest session cookie would add cross-origin cookie handling for no gain.
+- **Auth.js (NextAuth) in the frontend**: the API would still need to trust the user's identity,
+  so it ends up issuing or verifying a JWT anyway; one more library for the same result.
+- **Refresh tokens**: not needed for a demo-length MVP; the long-lived access token is the
+  accepted trade-off.

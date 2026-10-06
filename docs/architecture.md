@@ -14,7 +14,7 @@ or infrastructure. It describes what is installed, not what is planned.
 | ORM | Prisma | 7.10 | `prisma` CLI + `@prisma/client` pinned to the same version |
 | DB driver | `@prisma/adapter-pg` + `pg` | 7.10 / 8.x | Prisma 7 requires a driver adapter at runtime |
 | Database | PostgreSQL | 17 (Docker, local) | `docker-compose.yml` |
-| Auth | Own implementation | — | **Not implemented yet** |
+| Auth | Own JWT (`@nestjs/jwt`) + argon2/bcrypt, login only | — | **Not implemented yet.** Design: [security.md](rules/security.md#auth-design-mvp) |
 | Job queue | None | — | |
 | Tests | Vitest + Supertest | 4.1 / 7.x | |
 | Lint / format | oxlint (type-aware) / Prettier | 1.x / 3.x | |

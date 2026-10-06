@@ -41,7 +41,7 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 |---|---|---|
 | `app` | — (scaffold health/root endpoint) | Exists (Nest scaffold) |
 | `prisma` | — (`PrismaService`, DB connection) | Planned: first DB slice |
-| `auth` | TBD | Planned: own auth, not designed yet |
+| `auth` | TBD (ERD) | Planned: login story. Design in [security.md](../rules/security.md#auth-design-mvp) |
 | *(domain modules)* | TBD | Added as features are agreed |
 
 Update this table in the same commit that adds a module or a model.
