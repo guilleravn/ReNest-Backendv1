@@ -6,6 +6,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { CategoriesModule } from './categories/categories.module.js';
 import { validateEnv } from './config/env.validation.js';
+import { FeedModule } from './feed/feed.module.js';
 import { ListingsModule } from './listings/listings.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
@@ -15,6 +16,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     PrismaModule,
     ListingsModule,
     CategoriesModule,
+    FeedModule,
   ],
   controllers: [AppController],
   providers: [

@@ -23,3 +23,9 @@ and remove the entry here in the same commit.
 - `src/app.controller.spec.ts`: `it('should return ...')` instead of the
   `it('<returns…> when…')` style. It is scaffold; not worth touching in isolation.
 - `.oxlintrc.json` disables `typescript/no-explicit-any`: the linter does not catch `any`; QA does.
+- `src/feed/feed.service.ts`: queries `prisma.listing` directly instead of going through
+  `ListingsService`, breaking the "a module only queries its own Prisma models" rule in
+  [modules-and-layers.md](conventions/modules-and-layers.md). `ListingsService.findAllForSeller` is
+  hardcoded to the current seller and cannot serve the public, unscoped buyer feed (different
+  filters: category slug, title search, no seller scoping). Revisit if `listings` ever exposes a
+  reusable "find public listings" method both modules can call.

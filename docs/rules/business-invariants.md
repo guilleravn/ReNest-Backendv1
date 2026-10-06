@@ -131,6 +131,13 @@ The rules below are **agreed** (MVP scope). **Requires** names the mechanism def
 Decided 2026-10-06: every price is in USD, whatever the country of the seller or buyer (confirmed
 by the product owner); `description` is optional (NULL when not given).
 
+### The buyer feed only shows ACTIVE listings
+- **Requires**: `GET /feed` hardcodes `status: 'ACTIVE'` in the query (the service, not the DTO);
+  the client cannot override it with a query param.
+- **Protects**: buyers never see or try to reserve a listing that is already pending or completed.
+- **Fails as**: a buyer reserves (or contacts a seller about) an item that is no longer available.
+- **Tested by**: `src/feed/feed.service.spec.ts`, `test/feed.e2e-spec.ts`.
+
 ## Evaluated and rejected
 
 Alternatives considered and why they were not chosen.
