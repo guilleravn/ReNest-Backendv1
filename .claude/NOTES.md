@@ -13,6 +13,20 @@ Format:
 
 ---
 
+## 2026-10-06 · A9 / BO-39 (merge of develop with BO-27/BO-40) · main session
+
+- Merged `origin/develop` (BO-27 `GET /listings`) into `feat/a9-auth` instead of rebasing: the
+  branch was already pushed, and replaying its commits would leave intermediate commits broken
+  (the global guard makes the unauthenticated BO-27 e2e fail).
+- The BO-40 `@CurrentUser()` stub (`src/auth/current-user.decorator.ts`) is deleted, as its own
+  comment planned: `ListingsController` uses the real decorator from `src/common/decorators/`, so
+  `GET /listings` now requires a token (its known-deviations entry is removed).
+  `SEEDED_SELLER_ID` moved into `prisma/seed-fixtures.ts`.
+- `test/listings.e2e-spec.ts` authenticates as `SEEDED_SELLER_ID` with a JWT signed by the app's
+  `JwtService` and gained a 401-without-token case. Its fixture users use zone cities.
+- Dev databases seeded before the fixed ids make the seed stop with a reset hint
+  (`npx prisma migrate reset`), per BO-40's `assertFixedUserIds`.
+
 ## 2026-10-06 · A9 / BO-39 (code review round) · backend-qa-reviewer
 
 - Every per-IP credential limit assumes ReNest-Frontend's server sends `X-Forwarded-For` with the
@@ -86,6 +100,56 @@ Format:
   (type-only import from `src/users/user-zones.ts`, so tsx does not load `src/` at runtime).
   Existing dev databases keep the old cities until `npm run db:seed` is re-run.
 - Docs also updated beyond the brief's list: `docs/conventions/testing.md` (said "no sign-up").
+
+## 2026-10-06 · BO-40 (PR #7 review fixes) · backend-qa-reviewer
+- The current-seller stub is now the `@CurrentUser()` param decorator in
+  `src/auth/current-user.decorator.ts` (the boundary security.md defines); `CurrentSellerProvider`
+  is gone. BO-39 only swaps the decorator body and adds the global guard.
+- `GET /listings` now takes `page`/`pageSize` (default 20, max 100) and returns
+  `meta: { page, pageSize, total }`, per api-design.md: the "silently truncated at 20" note below
+  no longer applies. The FE contract only gained fields.
+- Seed: one pickup option per listing; prices lowered to $250/$80/$120/$50 (the USD note below is
+  resolved); a user's id is never rewritten on upsert, and the seed stops with a reset hint if
+  Samuel/Valentina exist with other ids (DBs seeded before the fixed ids). Fixed seed ids live in
+  `prisma/seed-fixtures.ts`.
+- Seed gaps that wait for the reservations slice are listed in `docs/known-deviations.md`.
+
+## 2026-10-06 · BO-40 (post-merge re-review) · backend-qa-reviewer
+- After the BO-36 merge, `test/seed.e2e-spec.ts` runs the seed (which now recreates the current
+  seller's listings) while `test/listings.e2e-spec.ts` clears them and asserts the COMPLETED tab
+  is empty: a race between files. `vitest.config.e2e.ts` now sets `fileParallelism: false`, so
+  e2e spec files run one at a time. Keep it unless every spec stops sharing fixed rows.
+- Seed listing prices were written as COP amounts and are now USD: $25,000 dining table, $8,000
+  chair, $12,000 bookshelf, $5,000 lamp. Lower them when the seed is next touched (demo data only).
+
+## 2026-10-06 · BO-40 · backend-qa-reviewer
+- `GET /listings` has no pagination params (`page`/`pageSize`): the sub-issue's contract is
+  `{ data, meta: { total } }` only, and `ListingsService.findAllForSeller` hardcodes
+  `take: DEFAULT_LISTINGS_TAKE` (20). A seller with more than 20 listings in one status will
+  silently see only the first 20 (ordered by `createdAt desc`), even though `meta.total` reports
+  the real count. Fine for the MVP seed/demo; add `page`/`pageSize` (per the proposal in
+  `api-design.md`) in the slice that first needs it, rather than assuming 20 is always enough.
+- `test/listings.e2e-spec.ts` seeds its own fixtures for `SEEDED_SELLER_ID` (the hardcoded current
+  seller, see `src/auth/current-seller.ts`) and clears that seller's listings in `beforeAll` first,
+  because `prisma/seed.ts` seeds demo data for the same fixed id. Re-run `npx prisma db seed`
+  after running this e2e suite if you need the demo fixtures back locally (idempotent, upsert-based).
+- Reviewed and kept as-is three infra fixes made directly on this branch while running the
+  migration/seed/build locally (not part of the BO-40 feature code, but needed to even run it):
+  `tsx` to run `prisma/seed.ts` (plain `node` could not resolve the generated client's `.js`
+  imports), `import 'dotenv/config'` in `src/main.ts` + `vitest.config.e2e.ts` (the app never
+  loaded `.env` anywhere), and `tsconfig.build.json` `rootDir`/`include` + `start:prod` pointing at
+  `dist/src/main` (Nest's build couldn't see `generated/prisma/`, which lives outside `src/`).
+  **Superseded by the BO-36 merge below**: `ConfigModule` (env validation) now loads `.env` and
+  provides `DATABASE_URL`/`PORT`, so the `dotenv/config` imports were dropped from `src/main.ts`
+  and `vitest.config.e2e.ts` in favor of BO-36's `ConfigService`/`readE2eDatabaseUrl` setup; the
+  `tsconfig.build.json`/`start:prod` fix still stands, as does `tsx` for the seed.
+- Merged `develop` (BO-36 DB foundation) into this branch before opening the PR: took BO-36's
+  `schema.prisma` (superset — adds `PickupOption`/`Weekday`, drops the unused `currency` column
+  now that every price is USD per BO-36's decision), dropped this branch's now-redundant
+  `add_listings_core` migration (BO-36's `add_listings_domain` already creates the same tables),
+  and merged `prisma/seed.ts` so BO-36's canonical accounts/categories seed also creates the BO-40
+  listings fixtures (`Samuel Rojas` now seeded with the id `CurrentSellerProvider` stubs as the
+  current seller, `Valentina Cruz` as the other seller for ownership-scoping tests).
 
 ## 2026-10-06 · BO-36 (DB foundation, review fixes) · backend-qa-reviewer
 

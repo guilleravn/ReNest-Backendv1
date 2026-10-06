@@ -11,6 +11,7 @@ import { CREDENTIALS_THROTTLERS } from './auth/credentials-throttle.js';
 import { JwtAuthGuard } from './auth/jwt-auth.guard.js';
 import { EnvironmentVariables, validateEnv } from './config/env.validation.js';
 import { parseTrustProxy } from './config/trust-proxy.js';
+import { ListingsModule } from './listings/listings.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { UsersModule } from './users/users.module.js';
 
@@ -37,6 +38,7 @@ export const DEFAULT_THROTTLER = 'default';
     PrismaModule,
     UsersModule,
     AuthModule,
+    ListingsModule,
   ],
   controllers: [AppController],
   providers: [

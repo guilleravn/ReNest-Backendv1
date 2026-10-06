@@ -46,7 +46,7 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 | `users` | `User` | Exists (A9). `UsersService` is the only code that touches `prisma.user`; `AuthModule` uses it. Also owns the zones list (`USER_ZONES`, a user's city) and serves it with `ZonesController` (`GET /zones`, no service: it returns a constant) |
 | `auth` | — (login, sign-up, JWT issuing/verification, global `JwtAuthGuard`) | Exists (A9). Design in [security.md](../rules/security.md#auth-design-mvp) |
 | `categories` | `Category` | Planned: A1 (`GET /categories`) |
-| `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Planned: A1 (`POST /listings`) |
+| `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Exists: `GET /listings?status=&page=&pageSize=` (the current seller's listings, BO-27). `POST /listings` (A1) still planned |
 | *(domain modules)* | TBD | Added as features are agreed |
 
 `@Public()` and `@CurrentUser()` live in `src/common/decorators/`, not in `auth/`: every module
