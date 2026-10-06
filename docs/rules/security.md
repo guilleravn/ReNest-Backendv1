@@ -30,7 +30,7 @@ onwards. Entry format: see [business-invariants.md](business-invariants.md#forma
 
 ### All input is validated and unknown fields are rejected
 - **Requires**: global `ValidationPipe` with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`, and DTOs with `class-validator` decorators. (Not installed yet; added with the first endpoint slice.)
-- **Protects**: services only receive well-formed, expected input; clients cannot set fields like `id`, `role` or `ownerId`.
+- **Protects**: services only receive well-formed, expected input; clients cannot set fields like `id`, `role` or `sellerId`.
 - **Fails as**: mass assignment (e.g. a user sets `role: "admin"`) or crashes on malformed input.
 
 ## How to apply them
@@ -38,7 +38,7 @@ onwards. Entry format: see [business-invariants.md](business-invariants.md#forma
 - **Global auth**: JWT guard registered as `APP_GUARD`; public routes marked with `@Public()`
   (`IS_PUBLIC_KEY`). Nothing is public by default.
 - **Ownership (BOLA/IDOR)**: the service filters by owner in the query itself
-  (`where: { id: itemId, ownerId: userId }`) or compares and throws 404/403. Hiding a button in the
+  (`where: { id: listingId, sellerId: userId }`) or compares and throws 404/403. Hiding a button in the
   frontend protects nothing.
 - **Roles**: `@Roles(...)` + `RolesGuard` only for coarse authorization; rules about data go in the
   service.

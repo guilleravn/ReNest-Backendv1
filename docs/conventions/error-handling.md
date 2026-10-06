@@ -11,8 +11,8 @@ code to use for each case: [api-design.md](api-design.md#error-status-codes).
 - Reusable domain errors: a subclass in `<module>/exceptions/`:
 
   ```ts
-  export class ItemNotAvailableException extends ConflictException {
-    constructor() { super('Item is not available for the requested dates'); }
+  export class ListingAlreadyReservedException extends ConflictException {
+    constructor() { super('Listing is already reserved'); }
   }
   ```
 
@@ -38,12 +38,12 @@ other error is rethrown as-is (it ends up as a generic 500).
 
 ## Logging
 
-- `private readonly logger = new Logger(ItemsService.name)`. ❌ `console.*`.
+- `private readonly logger = new Logger(ListingsService.name)`. ❌ `console.*`.
 - Levels: `error` for failures needing attention (include `error.stack`); `warn` for anomalous but
   recoverable; `log` for relevant business events (created, cancelled); `debug` for development
   detail.
 - Log **where the error is handled**, not in every layer that rethrows it.
 - Fixed message + identifying data:
-  ``this.logger.warn(`Rental ${rentalId} rejected: overlapping dates`)``.
+  ``this.logger.warn(`Reservation for listing ${listingId} rejected: already reserved`)``.
 - **Never** log: passwords, hashes, tokens, `Authorization`, secrets, connection strings, whole
   `req.body`/`req.headers`, whole user objects. Pick fields explicitly.

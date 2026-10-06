@@ -36,8 +36,8 @@ The project is ESM (`"type": "module"`, `moduleResolution: nodenext`).
 ## Dependency injection
 
 Always inject through the constructor:
-`constructor(private readonly itemsService: ItemsService) {}`.
-❌ `new ItemsService()` / `new PrismaClient()` inside a class.
+`constructor(private readonly listingsService: ListingsService) {}`.
+❌ `new ListingsService()` / `new PrismaClient()` inside a class.
 
 ## Async
 

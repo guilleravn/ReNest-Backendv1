@@ -1,7 +1,7 @@
 {
   "name": "ReNest-Backend",
   "version": "0.0.1",
-  "description": "ReNest backend - REST API for an item rental platform",
+  "description": "ReNest backend - REST API for a C2C secondhand marketplace",
   "author": "",
   "private": true,
   "license": "UNLICENSED",

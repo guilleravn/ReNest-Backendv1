@@ -1,8 +1,10 @@
 # CLAUDE.md
 
-ReNest Backend is the REST API for ReNest, an item rental platform (frontend in the separate
-`ReNest-Frontend` repo). Just bootstrapped: the domain and data model are defined feature by
-feature, so **do not invent tables, rules or endpoints** the issue/plan does not define.
+ReNest Backend is the REST API for ReNest, a C2C marketplace for buying and selling secondhand
+items in LatAm (frontend in the separate `ReNest-Frontend` repo). Just bootstrapped: the data
+model comes from the ERD and is built feature by feature, so **do not invent tables, rules or
+endpoints** the issue/plan does not define. Agreed domain rules:
+[docs/rules/business-invariants.md](docs/rules/business-invariants.md).
 
 Stack: Node 24, TypeScript (strict, ESM), NestJS 12, Prisma 7 + PostgreSQL 17 (Docker), Vitest +
 Supertest, oxlint + Prettier. Versions: [docs/architecture.md](docs/architecture.md#stack--current-state).

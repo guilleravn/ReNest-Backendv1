@@ -8,24 +8,26 @@ fields and tables: [naming.md](naming.md). Setup and versions: [architecture.md]
 There is no separate ERD yet, so `prisma/schema.prisma` is the source of truth. If an ERD is added
 under `docs/reference/`, any Prisma schema change must update the ERD in the same slice.
 
-**Data model: not yet defined.** Do not invent tables; they get added slice by slice as features
-are agreed.
+**Data model: not yet defined.** It will be designed as an ERD (first task after setup). Do not
+invent tables; they get added slice by slice as features are agreed.
 
 ## Model template
 
-```prisma
-model Item {
-  id               String     @id @default(uuid(7)) @db.Uuid
-  title            String     @db.VarChar(120)
-  pricePerDayCents Int        @map("price_per_day_cents")
-  isAvailable      Boolean    @default(true) @map("is_available")
-  ownerId          String     @map("owner_id") @db.Uuid
-  owner            User       @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+The template illustrates the conventions only; the real models and fields come from the ERD.
 
-  @@index([ownerId])
-  @@map("items")
+```prisma
+model Listing {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  title      String        @db.VarChar(120)
+  priceCents Int           @map("price_cents")
+  status     ListingStatus @default(ACTIVE)
+  sellerId   String        @map("seller_id") @db.Uuid
+  seller     User          @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([sellerId])
+  @@map("listings")
 }
 ```
 
@@ -41,7 +43,7 @@ model Item {
 
 ## Money
 
-The domain does not handle money yet. The moment it does:
+Listings have a price (there are no payments in the MVP). Rules:
 
 - Amounts are **integers in minor units (cents) end to end**: `priceCents Int` in Prisma, `number`
   (integer) in TS. ❌ `Float`, ❌ `Decimal` → `number` with fractional values.
@@ -70,7 +72,8 @@ Use the transaction client (`tx`) for the whole block; ❌ mixing `this.prisma` 
 `$transaction(async (tx) => ...)`.
 
 Each concrete case is listed with its invariant in
-[business-invariants.md](../rules/business-invariants.md). None exist yet.
+[business-invariants.md](../rules/business-invariants.md) (the main one: a listing can be
+reserved by only one buyer).
 
 ## Migrations
 

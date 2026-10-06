@@ -16,13 +16,15 @@ logic beyond calling the service.
 
 **E2E**: required for critical paths, against a real Postgres database (not mocked), covering the
 happy path + the 400/401/403/404/409 cases of the contract:
-- **Auth**: register, login, accessing a protected route with and without a valid token.
-- **The main business flow**: the rental flow, once it is defined.
+- **Auth**: login (valid credentials, wrong password, unknown email), accessing a protected route
+  with and without a valid token. There is no sign-up in the MVP.
+- **The main business flow**: publish a listing → reserve it with a pickup option → confirm
+  handover → confirm reception.
 - **Anything involving money or payments**, if/when the domain gets it.
 
 **Concurrency**: required wherever the domain has a real race condition, i.e. a limited resource
-that two requests can claim at the same time (for a rental platform, typically two users renting
-the same item for overlapping dates). These tests:
+that two requests can claim at the same time (here, typically two buyers reserving the same
+listing at once). These tests:
 - Run against the **real database**, never a mock (a mock cannot reproduce a race).
 - Fire the competing requests in parallel (`Promise.all`) and assert that exactly one succeeds and
   the DB invariant still holds.
@@ -47,13 +49,13 @@ collaborators that are *not* the subject of the test.
   enabled (`describe`/`it`/`expect` without importing).
 - **Naming**: `describe('<ClassName>')` → `describe('<methodName>')` →
   `it('<behavior> when <condition>')`, in English, third person:
-  ✅ `it('throws NotFoundException when the item belongs to another user')`
+  ✅ `it('throws NotFoundException when the listing belongs to another user')`
   ❌ `it('works')`, `it('test 1')`, `it('should fail')`.
-  E2E: `describe('POST /items')` → `it('returns 400 when title is missing')`.
+  E2E: `describe('POST /listings')` → `it('returns 400 when title is missing')`.
 - Arrange/Act/Assert (or Given/When/Then) structure, one behavior per `it`.
 - **Strong assertions**: `toEqual` with the expected object, `rejects.toThrow(NotFoundException)`,
   `toHaveBeenCalledWith(...)`. ❌ `toBeTruthy()`/`toBeDefined()` as the only assertion.
-- **Unit mocks**: `Test.createTestingModule({ providers: [ItemsService, { provide: PrismaService,
+- **Unit mocks**: `Test.createTestingModule({ providers: [ListingsService, { provide: PrismaService,
   useValue: prismaMock }] })` with typed `vi.fn()`s; only the methods actually used.
 - **Deterministic**: no real `Date.now()`/`new Date()` in assertions (fake timers or an injected
   date), no real network, no dependency on test order.

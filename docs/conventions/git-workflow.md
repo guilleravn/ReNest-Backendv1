@@ -70,12 +70,12 @@ test(listings): add e2e tests for the status filter
 ```
 
 - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `build`, `ci`.
-- Scope: the module (`items`, `auth`, `prisma`, ...), or `repo` for project-wide changes.
+- Scope: the module (`listings`, `auth`, `prisma`, ...), or `repo` for project-wide changes.
 - Summary: imperative, lowercase, no trailing period, ≤ 72 characters.
 - Body optional, explaining the **why**. Reference the issue in the body when applicable
   (`Refs: BO-27`).
-- ✅ `feat(items): add item listing endpoint`, `chore(prisma): add initial migration` ·
-  ❌ `Added items`, `feat: Add items.`
+- ✅ `feat(listings): add listings feed endpoint`, `chore(prisma): add initial migration` ·
+  ❌ `Added listings`, `feat: Add listings.`
 
 Rules:
 - No AI attribution: no `Co-Authored-By`, no "Generated with".

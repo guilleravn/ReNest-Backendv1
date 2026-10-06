@@ -14,12 +14,12 @@ src/
   prisma/
     prisma.module.ts
     prisma.service.ts
-  <module>/                  # one module per domain, plural kebab-case: items/, rental-requests/
+  <module>/                  # one module per domain, plural kebab-case: listings/, pickup-options/
     <module>.module.ts
     <module>.controller.ts
     <module>.service.ts
     <module>.service.spec.ts # unit test next to the code
-    dto/                     # create-item.dto.ts, update-item.dto.ts, list-items-query.dto.ts, item-response.dto.ts
+    dto/                     # create-listing.dto.ts, update-listing.dto.ts, list-listings-query.dto.ts, listing-response.dto.ts
     exceptions/              # only if the module has its own exceptions
     events/                  # only if it emits events
 test/
@@ -62,24 +62,24 @@ Rule of thumb: if the check needs the database, it belongs in the service.
 Thin: route, params, DTO, status code, current user → one service call.
 
 ```ts
-@Controller('items')
-export class ItemsController {
-  constructor(private readonly itemsService: ItemsService) {}
+@Controller('listings')
+export class ListingsController {
+  constructor(private readonly listingsService: ListingsService) {}
 
-  @Get(':itemId')
+  @Get(':listingId')
   findOne(
-    @Param('itemId', ParseUUIDPipe) itemId: string,
-  ): Promise<ItemResponseDto> {
-    return this.itemsService.findOne(itemId);
+    @Param('listingId', ParseUUIDPipe) listingId: string,
+  ): Promise<ListingResponseDto> {
+    return this.listingsService.findOne(listingId);
   }
 
-  @Delete(':itemId')
+  @Delete(':listingId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(
-    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Param('listingId', ParseUUIDPipe) listingId: string,
     @CurrentUser() user: CurrentUserPayload,
   ): Promise<void> {
-    await this.itemsService.remove(itemId, user.id);
+    await this.listingsService.remove(listingId, user.id);
   }
 }
 ```
