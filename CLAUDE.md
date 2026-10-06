@@ -37,7 +37,7 @@ npm run typecheck            # tsc --noEmit
 npm run format               # prettier
 npm run format:check         # prettier check (pre-commit)
 npm test                     # unit tests (*.spec.ts)
-npm run test:e2e             # e2e tests (test/*.e2e-spec.ts)
+npm run test:e2e             # e2e tests (test/*.e2e-spec.ts) on E2E_DATABASE_URL, never the dev DB
 npm run test:cov             # unit tests with coverage
 ```
 

@@ -8,6 +8,11 @@ What to cover and how to write the tests.
 | Command | `npm test` | `npm run test:e2e` (requires `npm run db:up`) |
 | Dependencies | mocked collaborators | real app (`AppModule`) via Supertest + real Postgres |
 
+**E2E database**: e2e runs on its own database, `E2E_DATABASE_URL` (`renest_e2e` in
+`.env.example`), never on the dev one. `test/e2e-global-setup.ts` creates it if missing and runs
+`prisma migrate deploy` before the suite; `vitest.config.e2e.ts` overrides `DATABASE_URL` with it
+for every spec and child process (e.g. the seed), and refuses to run if both URLs are the same.
+
 ## What to cover
 
 **Unit**: **every service method has unit tests**, covering the happy path and every business rule
