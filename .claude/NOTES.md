@@ -13,6 +13,19 @@ Format:
 
 ---
 
+## 2026-10-06 · BO-40 (PR #7 review fixes) · backend-qa-reviewer
+- The current-seller stub is now the `@CurrentUser()` param decorator in
+  `src/auth/current-user.decorator.ts` (the boundary security.md defines); `CurrentSellerProvider`
+  is gone. BO-39 only swaps the decorator body and adds the global guard.
+- `GET /listings` now takes `page`/`pageSize` (default 20, max 100) and returns
+  `meta: { page, pageSize, total }`, per api-design.md: the "silently truncated at 20" note below
+  no longer applies. The FE contract only gained fields.
+- Seed: one pickup option per listing; prices lowered to $250/$80/$120/$50 (the USD note below is
+  resolved); a user's id is never rewritten on upsert, and the seed stops with a reset hint if
+  Samuel/Valentina exist with other ids (DBs seeded before the fixed ids). Fixed seed ids live in
+  `prisma/seed-fixtures.ts`.
+- Seed gaps that wait for the reservations slice are listed in `docs/known-deviations.md`.
+
 ## 2026-10-06 · BO-40 (post-merge re-review) · backend-qa-reviewer
 - After the BO-36 merge, `test/seed.e2e-spec.ts` runs the seed (which now recreates the current
   seller's listings) while `test/listings.e2e-spec.ts` clears them and asserts the COMPLETED tab

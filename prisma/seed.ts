@@ -8,12 +8,14 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 
 import { PrismaClient } from '../generated/prisma/client.js';
-import { SEEDED_SELLER_ID } from '../src/auth/current-user.decorator.js';
+import {
+  OTHER_SELLER_ID,
+  SEED_LISTING_IDS,
+  SEED_PICKUP_OPTION_IDS,
+  SEEDED_SELLER_ID,
+} from './seed-fixtures.js';
 
 const MIN_SEED_PASSWORD_LENGTH = 8;
-
-// Matches the seller the `CurrentSellerProvider` stub acts as until BO-39 lands.
-const OTHER_SELLER_ID = '018f6e5c-0000-7000-8000-000000000002';
 
 const CATEGORIES = [
   { slug: 'furniture', name: 'Muebles' },
@@ -22,7 +24,7 @@ const CATEGORIES = [
 ] as const;
 
 const USERS = [
-  // The seller the `@CurrentUser()` stub acts as (see src/auth/current-user.decorator.ts).
+  // The seller the `@CurrentUser()` stub acts as until BO-39 (see src/auth/current-user.decorator.ts).
   {
     id: SEEDED_SELLER_ID,
     email: 'samuel@renest.test',
@@ -58,10 +60,13 @@ const USERS = [
   },
 ] as const;
 
-const ACTIVE_LISTING_ID = '018f6e5c-0000-7000-8000-000000000101';
-const PENDING_LISTING_ID = '018f6e5c-0000-7000-8000-000000000102';
-const COMPLETED_LISTING_ID = '018f6e5c-0000-7000-8000-000000000103';
-const OTHER_SELLER_LISTING_ID = '018f6e5c-0000-7000-8000-000000000104';
+// Users whose id is fixed because code or tests point at it.
+const FIXED_USER_IDS: ReadonlyMap<string, string> = new Map(
+  USERS.flatMap((user) => ('id' in user ? [[user.email, user.id]] : [])),
+);
+
+// Prisma returns `time` columns as a Date on 1970-01-01 UTC.
+const time = (hhmm: string): Date => new Date(`1970-01-01T${hhmm}:00.000Z`);
 
 // Real S3/R2 upload is a separate, later story (see known-deviations.md):
 // this is a placeholder-looking key, not an actual uploaded object.
@@ -79,8 +84,27 @@ function readSeedPassword(): string {
   return password;
 }
 
+// An account created by an older seed keeps its random id, so the listings below (and the
+// `@CurrentUser()` stub) would point at a user that does not exist. Fail with the fix instead.
+async function assertFixedUserIds(prisma: PrismaClient): Promise<void> {
+  const existing = await prisma.user.findMany({
+    where: { email: { in: [...FIXED_USER_IDS.keys()] } },
+    select: { id: true, email: true },
+  });
+  for (const { id, email } of existing) {
+    const expectedId = FIXED_USER_IDS.get(email);
+    if (id !== expectedId) {
+      throw new Error(
+        `${email} exists with id ${id}, expected ${expectedId}. This database was seeded ` +
+          'before the fixed ids: reset it with `npx prisma migrate reset`.',
+      );
+    }
+  }
+}
+
 async function seed(prisma: PrismaClient): Promise<void> {
   const passwordHash = await argon2.hash(readSeedPassword());
+  await assertFixedUserIds(prisma);
 
   const [furnitureCategory] = await prisma.$transaction([
     ...CATEGORIES.map((category) =>
@@ -91,43 +115,58 @@ async function seed(prisma: PrismaClient): Promise<void> {
       }),
     ),
     ...USERS.map(({ verifiedAt, ...user }) => {
-      const profile = { ...user, isVerified: verifiedAt !== null, verifiedAt };
+      // Everything but the primary key: an existing row's id is never rewritten (it may be referenced).
+      const { email, fullName, phoneE164, city } = user;
+      const profile = {
+        email,
+        fullName,
+        phoneE164,
+        city,
+        isVerified: verifiedAt !== null,
+        verifiedAt,
+      };
       return prisma.user.upsert({
-        where: { email: user.email },
-        create: { ...profile, passwordHash },
+        where: { email },
+        create: { ...user, ...profile, passwordHash },
         update: { ...profile, passwordHash },
       });
     }),
   ]);
 
+  // PENDING and COMPLETED have no reservation yet: the reservations table comes with its own
+  // slice, which must seed one for each (see docs/known-deviations.md).
   const listingsToSeed = [
     {
-      id: ACTIVE_LISTING_ID,
+      id: SEED_LISTING_IDS.active,
+      pickupOptionId: SEED_PICKUP_OPTION_IDS.active,
       sellerId: SEEDED_SELLER_ID,
       title: 'Wooden dining table',
       status: 'ACTIVE' as const,
-      priceCents: 25000_00,
+      priceCents: 250_00,
     },
     {
-      id: PENDING_LISTING_ID,
+      id: SEED_LISTING_IDS.pending,
+      pickupOptionId: SEED_PICKUP_OPTION_IDS.pending,
       sellerId: SEEDED_SELLER_ID,
       title: 'Reserved office chair',
       status: 'PENDING' as const,
-      priceCents: 8000_00,
+      priceCents: 80_00,
     },
     {
-      id: COMPLETED_LISTING_ID,
+      id: SEED_LISTING_IDS.completed,
+      pickupOptionId: SEED_PICKUP_OPTION_IDS.completed,
       sellerId: SEEDED_SELLER_ID,
       title: 'Sold bookshelf',
       status: 'COMPLETED' as const,
-      priceCents: 12000_00,
+      priceCents: 120_00,
     },
     {
-      id: OTHER_SELLER_LISTING_ID,
+      id: SEED_LISTING_IDS.otherSellerActive,
+      pickupOptionId: SEED_PICKUP_OPTION_IDS.otherSellerActive,
       sellerId: OTHER_SELLER_ID,
       title: "Another seller's lamp",
       status: 'ACTIVE' as const,
-      priceCents: 5000_00,
+      priceCents: 50_00,
     },
   ];
 
@@ -154,6 +193,21 @@ async function seed(prisma: PrismaClient): Promise<void> {
         listingId: listing.id,
         storageKey: placeholderStorageKey(listing.id),
         position: 0,
+      },
+    });
+
+    // Every published listing has at least one pickup option (business-invariants.md).
+    await prisma.pickupOption.upsert({
+      where: { id: listing.pickupOptionId },
+      update: {},
+      create: {
+        id: listing.pickupOptionId,
+        listingId: listing.id,
+        locationLabel: 'Parque México, Condesa',
+        address: 'Av. México s/n, Hipódromo, Cuauhtémoc, CDMX',
+        weekdays: ['SATURDAY', 'SUNDAY'],
+        startTime: time('10:00'),
+        endTime: time('13:00'),
       },
     });
   }

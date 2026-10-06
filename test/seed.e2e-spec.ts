@@ -5,8 +5,12 @@ import { execSync } from 'node:child_process';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 
+import {
+  OTHER_SELLER_ID,
+  SEED_LISTING_IDS,
+  SEEDED_SELLER_ID,
+} from '../prisma/seed-fixtures.js';
 import { AppModule } from '../src/app.module.js';
-import { SEEDED_SELLER_ID } from '../src/auth/current-user.decorator.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 const SEED_SLUGS = ['electronics', 'furniture', 'home'];
@@ -15,13 +19,6 @@ const SEED_EMAILS = [
   'samuel@renest.test',
   'tomas@renest.test',
   'valentina@renest.test',
-];
-const OTHER_SELLER_ID = '018f6e5c-0000-7000-8000-000000000002';
-const SEED_LISTING_IDS = [
-  '018f6e5c-0000-7000-8000-000000000101',
-  '018f6e5c-0000-7000-8000-000000000102',
-  '018f6e5c-0000-7000-8000-000000000103',
-  '018f6e5c-0000-7000-8000-000000000104',
 ];
 const SEED_TIMEOUT_MS = 60_000;
 
@@ -138,43 +135,35 @@ describe('Seed (e2e)', () => {
     ]);
   });
 
-  it('creates one listing per status for the current seller and one for the other seller, each with a cover photo', async () => {
+  it('creates one listing per status for the current seller and one for the other seller, each with a cover photo and a pickup option', async () => {
     const listings = await prisma.listing.findMany({
-      where: { id: { in: SEED_LISTING_IDS } },
+      where: { id: { in: Object.values(SEED_LISTING_IDS) } },
       select: {
         id: true,
         sellerId: true,
         status: true,
         photos: { select: { position: true } },
+        _count: { select: { pickupOptions: true } },
       },
       orderBy: { id: 'asc' },
     });
 
+    const expected = (
+      id: string,
+      sellerId: string,
+      status: 'ACTIVE' | 'PENDING' | 'COMPLETED',
+    ) => ({
+      id,
+      sellerId,
+      status,
+      photos: [{ position: 0 }],
+      _count: { pickupOptions: 1 },
+    });
     expect(listings).toEqual([
-      {
-        id: SEED_LISTING_IDS[0],
-        sellerId: SEEDED_SELLER_ID,
-        status: 'ACTIVE',
-        photos: [{ position: 0 }],
-      },
-      {
-        id: SEED_LISTING_IDS[1],
-        sellerId: SEEDED_SELLER_ID,
-        status: 'PENDING',
-        photos: [{ position: 0 }],
-      },
-      {
-        id: SEED_LISTING_IDS[2],
-        sellerId: SEEDED_SELLER_ID,
-        status: 'COMPLETED',
-        photos: [{ position: 0 }],
-      },
-      {
-        id: SEED_LISTING_IDS[3],
-        sellerId: OTHER_SELLER_ID,
-        status: 'ACTIVE',
-        photos: [{ position: 0 }],
-      },
+      expected(SEED_LISTING_IDS.active, SEEDED_SELLER_ID, 'ACTIVE'),
+      expected(SEED_LISTING_IDS.pending, SEEDED_SELLER_ID, 'PENDING'),
+      expected(SEED_LISTING_IDS.completed, SEEDED_SELLER_ID, 'COMPLETED'),
+      expected(SEED_LISTING_IDS.otherSellerActive, OTHER_SELLER_ID, 'ACTIVE'),
     ]);
   });
 });
