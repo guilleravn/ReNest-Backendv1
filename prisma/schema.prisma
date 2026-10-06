@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Source of truth for the data model since the first migration. Keep docs/erd.dbml in sync.
+// CHECK constraints are not expressible here: they live in the migration SQL (see database.md).
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,122 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum ListingCondition {
+  LIKE_NEW
+  GENTLY_USED
+  HEAVILY_USED
+
+  @@map("listing_condition")
+}
+
+enum ListingStatus {
+  ACTIVE
+  PENDING
+  COMPLETED
+
+  @@map("listing_status")
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+
+  @@map("weekday")
+}
+
+model User {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  fullName     String    @map("full_name") @db.VarChar(120)
+  phoneE164    String?   @map("phone_e164") @db.VarChar(20)
+  city         String    @db.VarChar(100)
+  isVerified   Boolean   @default(false) @map("is_verified")
+  verifiedAt   DateTime? @map("verified_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  listings Listing[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique @db.VarChar(60)
+  slug      String   @unique @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  listings Listing[]
+
+  @@map("categories")
+}
+
+model Listing {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  sellerId    String           @map("seller_id") @db.Uuid
+  seller      User             @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  categoryId  String           @map("category_id") @db.Uuid
+  category    Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  title       String           @db.VarChar(120)
+  description String?
+  condition   ListingCondition
+  // Whole US dollars in minor units (USD only in the MVP). CHECK (price_cents >= 100).
+  priceCents  Int              @map("price_cents")
+  status      ListingStatus    @default(ACTIVE)
+  publishedAt DateTime         @default(now()) @map("published_at") @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  photos        ListingPhoto[]
+  pickupOptions PickupOption[]
+
+  @@index([status, publishedAt])
+  @@index([status, categoryId])
+  @@index([sellerId, status])
+  @@map("listings")
+}
+
+model ListingPhoto {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  listingId  String   @map("listing_id") @db.Uuid
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  storageKey String   @map("storage_key") @db.VarChar(500)
+  // 0 = cover photo.
+  position   Int      @db.SmallInt
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([listingId, position])
+  @@map("listing_photos")
+}
+
+model PickupOption {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  listingId     String    @map("listing_id") @db.Uuid
+  listing       Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  // Public: shown to any buyer choosing an option.
+  locationLabel String    @map("location_label") @db.VarChar(120)
+  // Private (address, latitude, longitude): only for the seller and the buyer holding the reservation.
+  address       String    @db.VarChar(255)
+  latitude      Decimal?  @db.Decimal(9, 6)
+  longitude     Decimal?  @db.Decimal(9, 6)
+  weekdays      Weekday[]
+  // Local wall-clock time of the meetup city. CHECK (end_time > start_time).
+  startTime     DateTime  @map("start_time") @db.Time(0)
+  endTime       DateTime  @map("end_time") @db.Time(0)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([id, listingId])
+  @@index([listingId])
+  @@map("pickup_options")
 }

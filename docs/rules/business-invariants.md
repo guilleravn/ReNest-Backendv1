@@ -119,9 +119,17 @@ The rules below are **agreed** (MVP scope). **Requires** names the mechanism def
 - **Fails as**: published listings with no photo or with an empty/placeholder location.
 - **Tested by**: TBD.
 
-Open questions (resolve in the issue's plan, never by assumption):
-- Currency of `priceCents` for the MVP: one country/currency (drop `currency`), or a currency
-  field? If ARS is in scope, `price_cents` needs `bigint`.
+### A listing price is whole US dollars, at least $1
+- **Requires**: `price_cents` integer in USD minor units (single currency, so no `currency`
+  column); CHECKs `price_cents >= 100` and `price_cents % 100 = 0`. The create DTO enforces the
+  same rule.
+- **Protects**: buyers always see a real, positive price in one currency.
+- **Fails as**: free or fractional-dollar listings, or prices that mean different things per
+  country.
+- **Tested by**: DB level: `test/database-constraints.e2e-spec.ts` (listings). API level: TBD (A1).
+
+Decided 2026-10-06: every price is in USD, whatever the country of the seller or buyer (confirmed
+by the product owner); `description` is optional (NULL when not given).
 
 ## Evaluated and rejected
 
