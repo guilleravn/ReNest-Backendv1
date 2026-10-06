@@ -5,13 +5,13 @@ Do not rewrite these on your own initiative: fix them only within a slice that t
 and remove the entry here in the same commit.
 
 - `src/auth/current-user.decorator.ts`: `@CurrentUser()` is a stub that always returns the seeded
-  seller (`SEEDED_SELLER_ID`) and there is no global JWT guard, so `GET /listings` is reachable
-  without a token. Breaks "Protected routes require a valid token" in
+  seller (`SEEDED_SELLER_ID`) and there is no global JWT guard, so `GET /listings` and `GET /feed`
+  are reachable without a token. Breaks "Protected routes require a valid token" in
   [security.md](rules/security.md) until BO-39 (login) adds the guard and makes the decorator read
   the verified user. Consumers already use `@CurrentUser()`, so only `src/auth/` changes.
-- `GET /listings` (`src/listings/listings.service.ts`): `photoUrl` carries the cover photo's raw
-  `storageKey`, not a URL, because there is no storage yet. The storage slice (A1, S3/R2) resolves
-  it to a real URL under the same field name.
+- `GET /listings` and `GET /feed` (`src/listings/listings.service.ts`): `photoUrl` carries the
+  cover photo's raw `storageKey`, not a URL, because there is no storage yet. The storage slice
+  (A1, S3/R2) resolves it to a real URL under the same field name.
 - `prisma/seed.ts`: the `PENDING` and `COMPLETED` listings have no reservation (and so no buyer or
   `seller_handed_over_at`), because the `reservations` table does not exist yet. The reservations
   slice must seed a consistent reservation for each.

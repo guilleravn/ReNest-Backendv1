@@ -46,7 +46,7 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 | `users` | `User` | Planned: login story (`AuthModule` reads users through `UsersService`) |
 | `auth` | — (JWT issuing/verification only) | Only a `@CurrentUser()` stub (`src/auth/current-user.decorator.ts`) that returns the seeded seller until the login story (BO-39) adds the guard and JWT. Design in [security.md](../rules/security.md#auth-design-mvp) |
 | `categories` | `Category` | Planned: A1 (`GET /categories`) |
-| `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Exists: `GET /listings?status=&page=&pageSize=` (the current seller's listings, BO-27). `POST /listings` (A1) still planned |
+| `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Exists: `GET /listings?status=&page=&pageSize=` (the current seller's listings, BO-27) and `GET /feed?q=&page=&pageSize=` (every ACTIVE listing, title search, BO-5; `FeedController` in the same module). `POST /listings` (A1) still planned |
 | *(domain modules)* | TBD | Added as features are agreed |
 
 Update this table in the same commit that adds a module or a model. `prisma/seed.ts` and test

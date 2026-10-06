@@ -13,6 +13,19 @@ Format:
 
 ---
 
+## 2026-10-06 · BO-42 (B1 · GET /feed) · backend-issue-implementer
+- Verified with an e2e test: Prisma passes `contains` + `mode: 'insensitive'` to `ILIKE` **without
+  escaping** `%`/`_`. `ListingsService.findFeed` escapes `\`, `%` and `_` with a backslash
+  (`escapeLikePattern`, Postgres' default LIKE escape) so all three match literally.
+- Tomás has no fixed id (only Samuel/Valentina do), so the seed reads his id back from the user
+  upsert instead of adding a fixed one: a fixed id would make `assertFixedUserIds` fail on every
+  DB seeded before. The seed e2e looks him up by email.
+- Feed seed listings have fixed `publishedAt` values (2026-10-01..06) for a stable demo order;
+  the BO-40 listings keep the column default (`now()`), so they show first in the feed.
+- `q` sent twice (`?q=a&q=b`) arrives as an array and is rejected with `400` by `@IsString()`.
+- `test/feed.e2e-spec.ts` scopes every search with a per-run token at the end of its fixture
+  titles, since the feed is global and the seed's ACTIVE listings share the database.
+
 ## 2026-10-06 · BO-40 (PR #7 review fixes) · backend-qa-reviewer
 - The current-seller stub is now the `@CurrentUser()` param decorator in
   `src/auth/current-user.decorator.ts` (the boundary security.md defines); `CurrentSellerProvider`

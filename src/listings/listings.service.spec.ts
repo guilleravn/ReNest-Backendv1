@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { ListingsService } from './listings.service.js';
+import { escapeLikePattern, ListingsService } from './listings.service.js';
 
 const SELLER_ID = '018f6e5c-0000-7000-8000-000000000001';
 const FIRST_PAGE = { page: 1, pageSize: 20 };
@@ -156,5 +156,148 @@ describe('ListingsService', () => {
 
       expect(result.data[0]?.photoUrl).toBeNull();
     });
+  });
+
+  describe('findFeed', () => {
+    const buildFeedRow = (
+      overrides: Partial<Record<string, unknown>> = {},
+    ) => ({
+      id: '018f6e5c-0000-7000-8000-000000000105',
+      title: 'Leather armchair',
+      priceCents: 18000,
+      publishedAt: new Date('2026-10-01T15:00:00.000Z'),
+      category: { slug: 'furniture', name: 'Muebles' },
+      photos: [{ storageKey: 'listings/105/photo-0.jpg' }],
+      ...overrides,
+    });
+
+    it('returns ACTIVE listings as feed cards, newest first, when no q is given', async () => {
+      const row = buildFeedRow();
+      prisma.listing.findMany.mockResolvedValue([row]);
+      prisma.listing.count.mockResolvedValue(1);
+
+      const result = await service.findFeed(FIRST_PAGE);
+
+      expect(prisma.listing.findMany).toHaveBeenCalledWith({
+        where: { status: 'ACTIVE' },
+        skip: 0,
+        take: 20,
+        orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          title: true,
+          priceCents: true,
+          publishedAt: true,
+          category: { select: { slug: true, name: true } },
+          photos: {
+            select: { storageKey: true },
+            orderBy: { position: 'asc' },
+            take: 1,
+          },
+        },
+      });
+      expect(prisma.listing.count).toHaveBeenCalledWith({
+        where: { status: 'ACTIVE' },
+      });
+      expect(result).toEqual({
+        data: [
+          {
+            id: row.id,
+            title: 'Leather armchair',
+            priceCents: 18000,
+            photoUrl: 'listings/105/photo-0.jpg',
+            category: { slug: 'furniture', name: 'Muebles' },
+            publishedAt: '2026-10-01T15:00:00.000Z',
+          },
+        ],
+        meta: { page: 1, pageSize: 20, total: 1 },
+      });
+    });
+
+    it('adds a case-insensitive title filter on top of ACTIVE when q is given', async () => {
+      prisma.listing.findMany.mockResolvedValue([]);
+      prisma.listing.count.mockResolvedValue(0);
+
+      await service.findFeed({ q: 'armchair', ...FIRST_PAGE });
+
+      const where = {
+        status: 'ACTIVE',
+        title: { contains: 'armchair', mode: 'insensitive' },
+      };
+      expect(prisma.listing.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where }),
+      );
+      expect(prisma.listing.count).toHaveBeenCalledWith({ where });
+    });
+
+    it('does not filter by title when q is an empty string', async () => {
+      prisma.listing.findMany.mockResolvedValue([]);
+      prisma.listing.count.mockResolvedValue(0);
+
+      await service.findFeed({ q: '', ...FIRST_PAGE });
+
+      expect(prisma.listing.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { status: 'ACTIVE' } }),
+      );
+    });
+
+    it('escapes LIKE wildcards and backslashes when q contains them', async () => {
+      prisma.listing.findMany.mockResolvedValue([]);
+      prisma.listing.count.mockResolvedValue(0);
+
+      await service.findFeed({ q: '50%_off\\', ...FIRST_PAGE });
+
+      expect(prisma.listing.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: 'ACTIVE',
+            title: { contains: '50\\%\\_off\\\\', mode: 'insensitive' },
+          },
+        }),
+      );
+    });
+
+    it('returns an empty data array when nothing matches', async () => {
+      prisma.listing.findMany.mockResolvedValue([]);
+      prisma.listing.count.mockResolvedValue(0);
+
+      const result = await service.findFeed({ q: 'sofa', ...FIRST_PAGE });
+
+      expect(result).toEqual({
+        data: [],
+        meta: { page: 1, pageSize: 20, total: 0 },
+      });
+    });
+
+    it('skips the previous pages when a later page is requested', async () => {
+      prisma.listing.findMany.mockResolvedValue([]);
+      prisma.listing.count.mockResolvedValue(7);
+
+      const result = await service.findFeed({ page: 3, pageSize: 5 });
+
+      expect(prisma.listing.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 10, take: 5 }),
+      );
+      expect(result.meta).toEqual({ page: 3, pageSize: 5, total: 7 });
+    });
+
+    it('returns a null photoUrl when the listing has no photo', async () => {
+      prisma.listing.findMany.mockResolvedValue([buildFeedRow({ photos: [] })]);
+      prisma.listing.count.mockResolvedValue(1);
+
+      const result = await service.findFeed(FIRST_PAGE);
+
+      expect(result.data[0]?.photoUrl).toBeNull();
+    });
+  });
+});
+
+describe('escapeLikePattern', () => {
+  it('prefixes %, _ and backslash with a backslash when the text contains them', () => {
+    expect(escapeLikePattern('100%_a\\b')).toBe('100\\%\\_a\\\\b');
+  });
+
+  it('returns the text unchanged when it has no special characters', () => {
+    expect(escapeLikePattern('Leather armchair')).toBe('Leather armchair');
   });
 });
