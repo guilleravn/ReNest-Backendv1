@@ -1,5 +1,5 @@
 // ReNest — MVP R1 "The Handshake" (Epics 1–5 + login)
-// Postgres · auth delegated to Firebase Auth / Auth0
+// Postgres · own auth: email + password (argon2/bcrypt hash) → single JWT access token (no refresh tokens, see security.md)
 // Paste into https://dbdiagram.io to render the diagram.
 
 Enum listing_condition {
@@ -12,19 +12,19 @@ Enum listing_condition {
 
 Enum listing_status {
   active      // published, reservable
-  pending     // reserved, waiting for pickup
-  completed   // both confirmations done
+  pending     // reserved, waiting for the seller's handover
+  completed   // seller confirmed the handover (My Listings "Completed" tab)
 }
 
 Enum reservation_status {
-  reserved
-  completed
+  reserved    // created; at least one confirmation missing
+  completed   // buyer reception + seller handover both confirmed (North Star)
 }
 
 Table users {
   id            uuid [pk]
-  auth_uid      varchar(128) [not null, unique, note: 'Firebase/Auth0 UID. We never store passwords']
   email         varchar(255) [not null, unique]
+  password_hash varchar(255) [not null, note: 'argon2/bcrypt hash. Never returned by the API or logged']
   full_name     varchar(120) [not null]
   phone_e164    varchar(20)  [note: 'Nullable → fallback "can\'t be reached this way" (PM-120/129/141)']
   avatar_url    varchar(500)
@@ -32,12 +32,15 @@ Table users {
   is_verified   boolean [not null, default: false, note: 'Set manually by the ReNest team']
   verified_at   timestamptz
   created_at    timestamptz [not null, default: `now()`]
+  updated_at    timestamptz [not null, default: `now()`]
 }
 
 Table categories {
-  id    serial [pk]
-  name  varchar(60) [not null, unique]
-  slug  varchar(60) [not null, unique]
+  id          serial [pk]
+  name        varchar(60) [not null, unique]
+  slug        varchar(60) [not null, unique]
+  created_at  timestamptz [not null, default: `now()`]
+  updated_at  timestamptz [not null, default: `now()`]
 }
 
 Table listings {
@@ -47,8 +50,8 @@ Table listings {
   title              varchar(120) [not null]
   description        text [not null]
   condition          listing_condition [not null]
-  price_amount       decimal(12,2) [not null, note: 'CHECK (price_amount >= 0)']
-  currency           char(3) [not null, note: 'ISO 4217: COP, MXN, ARS...']
+  price_cents        int [not null, note: 'Integer minor units (database.md). CHECK (price_cents >= 0). int max ≈ 21M currency units: switch to bigint if ARS is in scope']
+  currency           char(3) [not null, note: 'ISO 4217: COP, MXN, ARS... Drop if the MVP is single-country (open question)']
   area_label         varchar(120) [not null, note: 'Public location for cards (neighborhood/city). The exact address lives in pickup_options']
   status             listing_status [not null, default: 'active']
   creation_started_at timestamptz [note: 'Sent by the client when tapping "Create listing" → Time to First Listing KPI']
@@ -62,7 +65,16 @@ Table listings {
     (seller_id, status)      // My Listings per tab
   }
 
-  Note: 'Keyword search: GIN index on to_tsvector(title || description) (added in a SQL migration)'
+  Note: '''
+  Keyword search: GIN index on to_tsvector(title || description) (added in a SQL migration).
+
+  Status lifecycle (always updated in the same transaction as the reservation change):
+  - active → pending: on reserve, via UPDATE listings SET status = 'pending' WHERE id = ? AND status = 'active'.
+    0 rows updated → 409 (already reserved or completed).
+  - pending → completed: when the seller confirms the handover (seller_handed_over_at set).
+  listing.status = completed does NOT mean the transaction is completed: that is reservations.status
+  (both confirmations). My Listings uses the listing status; the North Star uses the reservation.
+  '''
 }
 
 Table listing_photos {
@@ -71,6 +83,7 @@ Table listing_photos {
   storage_key varchar(500) [not null, note: 'S3/R2 object key']
   position    smallint [not null, note: '0 = cover photo']
   created_at  timestamptz [not null, default: `now()`]
+  updated_at  timestamptz [not null, default: `now()`]
 
   indexes {
     (listing_id, position) [unique]
@@ -83,14 +96,14 @@ Table listing_photos {
 Table pickup_options {
   id             uuid [pk]
   listing_id     uuid [not null, ref: > listings.id]
-  location_label varchar(120) [not null]
+  location_label varchar(120) [not null, note: 'PUBLIC: shown to any buyer choosing an option']
   address        varchar(255) [not null, note: 'PRIVATE: only visible to the seller and the buyer holding the reservation']
-  latitude       decimal(9,6)
-  longitude      decimal(9,6)
-  pickup_date    date [not null]
-  start_time     time [not null]
-  end_time       time [not null, note: 'CHECK (end_time > start_time)']
+  latitude       decimal(9,6) [note: 'PRIVATE (same as address): coordinates reveal the exact location']
+  longitude      decimal(9,6) [note: 'PRIVATE (same as address)']
+  starts_at      timestamptz [not null, note: 'PUBLIC. The pickup day is derived from starts_at']
+  ends_at        timestamptz [not null, note: 'PUBLIC. CHECK (ends_at > starts_at)']
   created_at     timestamptz [not null, default: `now()`]
+  updated_at     timestamptz [not null, default: `now()`]
 
   indexes {
     listing_id
@@ -107,8 +120,10 @@ Table reservations {
   status                reservation_status [not null, default: 'reserved']
   reserved_at           timestamptz [not null, default: `now()`]
   buyer_received_at     timestamptz [note: '"I picked up the item"']
-  seller_handed_over_at timestamptz [note: 'Confirm handover (C10)']
-  completed_at          timestamptz [note: 'Set once both timestamps exist → North Star']
+  seller_handed_over_at timestamptz [note: 'Confirm handover (C10). Also moves the listing to completed']
+  completed_at          timestamptz [note: 'Set (with status = completed) once both timestamps exist → North Star']
+  created_at            timestamptz [not null, default: `now()`]
+  updated_at            timestamptz [not null, default: `now()`]
 
   indexes {
     (buyer_id, status)   // My Purchases: In progress / Completed
@@ -118,6 +133,7 @@ Table reservations {
   Composite FK: (pickup_option_id, listing_id) → pickup_options(id, listing_id).
   Guarantees at the DB level that the buyer only picks a pair from THAT listing (rule #1).
   CHECK (buyer_id <> seller) is validated in the service.
+  Reservation insert + listing status update run in one transaction (see listings note).
   '''
 }
 
@@ -131,6 +147,7 @@ Table reception_checklists {
   all_parts_included    boolean [not null]
   notes                 text
   created_at            timestamptz [not null, default: `now()`]
+  updated_at            timestamptz [not null, default: `now()`]
 
   Note: '⚠ Tentative columns: align with the AC items. Dispute = any of them false'
 }
@@ -139,14 +156,19 @@ Table reception_checklists {
 Table seller_ratings {
   id             uuid [pk]
   reservation_id uuid [not null, unique, ref: - reservations.id]
-  seller_id      uuid [not null, ref: > users.id]
-  buyer_id       uuid [not null, ref: > users.id]
+  seller_id      uuid [not null, ref: > users.id, note: 'Denormalized for the average index. Always copied from reservation → listing.seller_id, never from client input']
   stars          smallint [not null, note: 'CHECK (stars BETWEEN 1 AND 5)']
   created_at     timestamptz [not null, default: `now()`]
+  updated_at     timestamptz [not null, default: `now()`]
 
   indexes {
     seller_id   // average for the badge / seller snapshot
   }
+
+  Note: '''
+  The rater is reservations.buyer_id (no buyer_id column here).
+  Service rule: only the buyer of that reservation can rate, and only after buyer_received_at is set.
+  '''
 }
 
 // KPI instrumentation (open question in the brief: nobody owns it yet)
@@ -158,6 +180,7 @@ Table analytics_events {
   properties  jsonb
   session_id  varchar(64)
   created_at  timestamptz [not null, default: `now()`]
+  updated_at  timestamptz [not null, default: `now()`]
 
   indexes {
     (event_name, created_at)
