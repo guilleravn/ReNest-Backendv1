@@ -6,6 +6,7 @@ import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 
 import { AppModule } from '../src/app.module.js';
+import { SEEDED_SELLER_ID } from '../src/auth/current-seller.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 const SEED_SLUGS = ['electronics', 'furniture', 'home'];
@@ -14,6 +15,13 @@ const SEED_EMAILS = [
   'samuel@renest.test',
   'tomas@renest.test',
   'valentina@renest.test',
+];
+const OTHER_SELLER_ID = '018f6e5c-0000-7000-8000-000000000002';
+const SEED_LISTING_IDS = [
+  '018f6e5c-0000-7000-8000-000000000101',
+  '018f6e5c-0000-7000-8000-000000000102',
+  '018f6e5c-0000-7000-8000-000000000103',
+  '018f6e5c-0000-7000-8000-000000000104',
 ];
 const SEED_TIMEOUT_MS = 60_000;
 
@@ -115,5 +123,58 @@ describe('Seed (e2e)', () => {
       expect(passwordHash).toMatch(/^\$argon2id\$/);
       await expect(argon2.verify(passwordHash, password)).resolves.toBe(true);
     }
+  });
+
+  it('gives Samuel the current-seller id and Valentina the other-seller id', async () => {
+    const users = await prisma.user.findMany({
+      where: { email: { in: ['samuel@renest.test', 'valentina@renest.test'] } },
+      select: { email: true, id: true },
+      orderBy: { email: 'asc' },
+    });
+
+    expect(users).toEqual([
+      { email: 'samuel@renest.test', id: SEEDED_SELLER_ID },
+      { email: 'valentina@renest.test', id: OTHER_SELLER_ID },
+    ]);
+  });
+
+  it('creates one listing per status for the current seller and one for the other seller, each with a cover photo', async () => {
+    const listings = await prisma.listing.findMany({
+      where: { id: { in: SEED_LISTING_IDS } },
+      select: {
+        id: true,
+        sellerId: true,
+        status: true,
+        photos: { select: { position: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    expect(listings).toEqual([
+      {
+        id: SEED_LISTING_IDS[0],
+        sellerId: SEEDED_SELLER_ID,
+        status: 'ACTIVE',
+        photos: [{ position: 0 }],
+      },
+      {
+        id: SEED_LISTING_IDS[1],
+        sellerId: SEEDED_SELLER_ID,
+        status: 'PENDING',
+        photos: [{ position: 0 }],
+      },
+      {
+        id: SEED_LISTING_IDS[2],
+        sellerId: SEEDED_SELLER_ID,
+        status: 'COMPLETED',
+        photos: [{ position: 0 }],
+      },
+      {
+        id: SEED_LISTING_IDS[3],
+        sellerId: OTHER_SELLER_ID,
+        status: 'ACTIVE',
+        photos: [{ position: 0 }],
+      },
+    ]);
   });
 });
