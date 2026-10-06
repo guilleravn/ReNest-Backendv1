@@ -1,3 +1,6 @@
+// Source of truth for the data model since the first migration. Keep docs/erd.dbml in sync.
+// CHECK constraints are not expressible here: they live in the migration SQL (see database.md).
+
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -21,6 +24,18 @@ enum ListingStatus {
   COMPLETED
 
   @@map("listing_status")
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+
+  @@map("weekday")
 }
 
 model User {
@@ -55,20 +70,21 @@ model Category {
 model Listing {
   id          String           @id @default(uuid(7)) @db.Uuid
   sellerId    String           @map("seller_id") @db.Uuid
+  seller      User             @relation(fields: [sellerId], references: [id], onDelete: Restrict)
   categoryId  String           @map("category_id") @db.Uuid
+  category    Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   title       String           @db.VarChar(120)
-  description String           @db.Text
+  description String?
   condition   ListingCondition
+  // Whole US dollars in minor units (USD only in the MVP). CHECK (price_cents >= 100).
   priceCents  Int              @map("price_cents")
-  currency    String           @db.Char(3)
   status      ListingStatus    @default(ACTIVE)
   publishedAt DateTime         @default(now()) @map("published_at") @db.Timestamptz(3)
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  seller   User           @relation(fields: [sellerId], references: [id], onDelete: Restrict)
-  category Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  photos   ListingPhoto[]
+  photos        ListingPhoto[]
+  pickupOptions PickupOption[]
 
   @@index([status, publishedAt])
   @@index([status, categoryId])
@@ -79,13 +95,35 @@ model Listing {
 model ListingPhoto {
   id         String   @id @default(uuid(7)) @db.Uuid
   listingId  String   @map("listing_id") @db.Uuid
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
   storageKey String   @map("storage_key") @db.VarChar(500)
+  // 0 = cover photo.
   position   Int      @db.SmallInt
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-
   @@unique([listingId, position])
   @@map("listing_photos")
+}
+
+model PickupOption {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  listingId     String    @map("listing_id") @db.Uuid
+  listing       Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  // Public: shown to any buyer choosing an option.
+  locationLabel String    @map("location_label") @db.VarChar(120)
+  // Private (address, latitude, longitude): only for the seller and the buyer holding the reservation.
+  address       String    @db.VarChar(255)
+  latitude      Decimal?  @db.Decimal(9, 6)
+  longitude     Decimal?  @db.Decimal(9, 6)
+  weekdays      Weekday[]
+  // Local wall-clock time of the meetup city. CHECK (end_time > start_time).
+  startTime     DateTime  @map("start_time") @db.Time(0)
+  endTime       DateTime  @map("end_time") @db.Time(0)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([id, listingId])
+  @@index([listingId])
+  @@map("pickup_options")
 }

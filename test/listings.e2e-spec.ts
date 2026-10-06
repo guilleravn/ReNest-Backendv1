@@ -40,7 +40,10 @@ describe('GET /listings (e2e)', () => {
       update: {},
       create: {
         id: SEEDED_SELLER_ID,
-        email: 'seller-e2e@renest.seed',
+        // Same email `prisma/seed.ts` uses for this id: whichever seed runs
+        // first, the other upserts into the same row instead of colliding on
+        // the `id` primary key with a different email.
+        email: 'samuel@renest.test',
         passwordHash: 'seed-only-not-a-real-hash',
         fullName: 'E2E Seeded Seller',
         city: 'Bogota',
@@ -84,7 +87,6 @@ describe('GET /listings (e2e)', () => {
         description: 'Fixture for GET /listings e2e tests.',
         condition: 'GENTLY_USED',
         priceCents: 10000,
-        currency: 'COP',
         status: 'ACTIVE',
         photos: {
           create: {
@@ -104,7 +106,6 @@ describe('GET /listings (e2e)', () => {
         description: 'Fixture for GET /listings e2e tests.',
         condition: 'GENTLY_USED',
         priceCents: 20000,
-        currency: 'COP',
         status: 'PENDING',
         photos: {
           create: {
@@ -124,7 +125,6 @@ describe('GET /listings (e2e)', () => {
         description: 'Fixture for GET /listings e2e tests.',
         condition: 'GENTLY_USED',
         priceCents: 30000,
-        currency: 'COP',
         status: 'ACTIVE',
         photos: {
           create: {

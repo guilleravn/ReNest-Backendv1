@@ -1,22 +1,62 @@
-// Seed scoped to BO-40 (GET /listings?status=): just enough data to exercise
-// the "My Listings per tab" query and prove ownership scoping. Not a general
-// fixture set — extend it in the slice that needs more (buyers, reservations,
-// pickup options, etc.).
-//
-// Run with `npm run prisma:migrate` (applies the migration) then
-// `npx prisma db seed` (wired via `migrations.seed` in prisma.config.ts).
+// Seeds the reference data and the pre-created accounts of the MVP (there is no sign-up),
+// plus the BO-40 listings fixtures ("My Listings per tab" + ownership scoping).
+// Idempotent: every row is upserted by a natural key, so it can run after each migration.
+// All people below are synthetic (reserved `.test` domain, placeholder phone numbers).
+import 'dotenv/config';
 
 import { PrismaPg } from '@prisma/adapter-pg';
+import * as argon2 from 'argon2';
+
 import { PrismaClient } from '../generated/prisma/client.js';
 import { SEEDED_SELLER_ID } from '../src/auth/current-seller.js';
 
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
-});
+const MIN_SEED_PASSWORD_LENGTH = 8;
 
-// Fixed ids so the seed is deterministic and idempotent (safe to re-run).
+// Matches the seller the `CurrentSellerProvider` stub acts as until BO-39 lands.
 const OTHER_SELLER_ID = '018f6e5c-0000-7000-8000-000000000002';
-const CATEGORY_ID = '018f6e5c-0000-7000-8000-000000000010';
+
+const CATEGORIES = [
+  { slug: 'furniture', name: 'Muebles' },
+  { slug: 'electronics', name: 'Electrónica' },
+  { slug: 'home', name: 'Hogar' },
+] as const;
+
+const USERS = [
+  // The seller the `CurrentSellerProvider` stub acts as (see src/auth/current-seller.ts).
+  {
+    id: SEEDED_SELLER_ID,
+    email: 'samuel@renest.test',
+    fullName: 'Samuel Rojas',
+    phoneE164: '+525500000001',
+    city: 'Ciudad de México',
+    verifiedAt: new Date('2026-10-01T00:00:00.000Z'),
+  },
+  // A second seller, used to prove listings are scoped by ownership.
+  {
+    id: OTHER_SELLER_ID,
+    email: 'valentina@renest.test',
+    fullName: 'Valentina Cruz',
+    phoneE164: '+525500000002',
+    city: 'Ciudad de México',
+    verifiedAt: null,
+  },
+  // The buyer persona used by the Gherkin scenarios, the login story and the e2e tests.
+  {
+    email: 'camila@renest.test',
+    fullName: 'Camila Torres',
+    phoneE164: '+525500000003',
+    city: 'Ciudad de México',
+    verifiedAt: null,
+  },
+  // No phone on purpose: exercises the WhatsApp "can't be reached" fallback.
+  {
+    email: 'tomas@renest.test',
+    fullName: 'Tomás Herrera',
+    phoneE164: null,
+    city: 'Guadalajara',
+    verifiedAt: null,
+  },
+] as const;
 
 const ACTIVE_LISTING_ID = '018f6e5c-0000-7000-8000-000000000101';
 const PENDING_LISTING_ID = '018f6e5c-0000-7000-8000-000000000102';
@@ -29,43 +69,36 @@ function placeholderStorageKey(listingId: string): string {
   return `listings/${listingId}/photo-0.jpg`;
 }
 
-async function main(): Promise<void> {
-  await prisma.user.upsert({
-    where: { id: SEEDED_SELLER_ID },
-    update: {},
-    create: {
-      id: SEEDED_SELLER_ID,
-      email: 'seller@renest.seed',
-      passwordHash: 'seed-only-not-a-real-hash',
-      fullName: 'Seeded Seller',
-      city: 'Bogota',
-      isVerified: true,
-      verifiedAt: new Date(),
-    },
-  });
+function readSeedPassword(): string {
+  const password = process.env['SEED_USER_PASSWORD'];
+  if (!password || password.length < MIN_SEED_PASSWORD_LENGTH) {
+    throw new Error(
+      `SEED_USER_PASSWORD must be set (at least ${MIN_SEED_PASSWORD_LENGTH} characters)`,
+    );
+  }
+  return password;
+}
 
-  await prisma.user.upsert({
-    where: { id: OTHER_SELLER_ID },
-    update: {},
-    create: {
-      id: OTHER_SELLER_ID,
-      email: 'other-seller@renest.seed',
-      passwordHash: 'seed-only-not-a-real-hash',
-      fullName: 'Other Seeded Seller',
-      city: 'Medellin',
-      isVerified: false,
-    },
-  });
+async function seed(prisma: PrismaClient): Promise<void> {
+  const passwordHash = await argon2.hash(readSeedPassword());
 
-  await prisma.category.upsert({
-    where: { id: CATEGORY_ID },
-    update: {},
-    create: {
-      id: CATEGORY_ID,
-      name: 'Furniture',
-      slug: 'furniture',
-    },
-  });
+  const [furnitureCategory] = await prisma.$transaction([
+    ...CATEGORIES.map((category) =>
+      prisma.category.upsert({
+        where: { slug: category.slug },
+        create: category,
+        update: { name: category.name },
+      }),
+    ),
+    ...USERS.map(({ verifiedAt, ...user }) => {
+      const profile = { ...user, isVerified: verifiedAt !== null, verifiedAt };
+      return prisma.user.upsert({
+        where: { email: user.email },
+        create: { ...profile, passwordHash },
+        update: { ...profile, passwordHash },
+      });
+    }),
+  ]);
 
   const listingsToSeed = [
     {
@@ -105,12 +138,11 @@ async function main(): Promise<void> {
       create: {
         id: listing.id,
         sellerId: listing.sellerId,
-        categoryId: CATEGORY_ID,
+        categoryId: furnitureCategory.id,
         title: listing.title,
         description: `${listing.title} — seeded for BO-40, in good condition.`,
         condition: 'GENTLY_USED',
         priceCents: listing.priceCents,
-        currency: 'COP',
         status: listing.status,
       },
     });
@@ -125,14 +157,18 @@ async function main(): Promise<void> {
       },
     });
   }
+
+  console.log(
+    `Seeded ${CATEGORIES.length} categories, ${USERS.length} users and ${listingsToSeed.length} listings`,
+  );
 }
 
-main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (error: unknown) => {
-    console.error(error);
-    await prisma.$disconnect();
-    process.exitCode = 1;
-  });
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env['DATABASE_URL'] }),
+});
+
+try {
+  await seed(prisma);
+} finally {
+  await prisma.$disconnect();
+}

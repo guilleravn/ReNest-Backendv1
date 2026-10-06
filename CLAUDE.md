@@ -25,6 +25,7 @@ npm run docker:down          # stop both — needed for ReNest-Frontend's e2e ag
 npm run prisma:generate      # regenerate the Prisma client
 npm run prisma:migrate       # create + apply a migration (dev)
 npm run prisma:deploy        # apply pending migrations (CI/prod)
+npm run db:seed              # idempotent seed: categories + pre-created accounts (SEED_USER_PASSWORD)
 npm run prisma:studio        # browse the DB
 
 npm run start:dev            # dev server with watch (PORT, default 3000)
@@ -36,7 +37,7 @@ npm run typecheck            # tsc --noEmit
 npm run format               # prettier
 npm run format:check         # prettier check (pre-commit)
 npm test                     # unit tests (*.spec.ts)
-npm run test:e2e             # e2e tests (test/*.e2e-spec.ts)
+npm run test:e2e             # e2e tests (test/*.e2e-spec.ts) on E2E_DATABASE_URL, never the dev DB
 npm run test:cov             # unit tests with coverage
 ```
 
