@@ -13,6 +13,14 @@ Format:
 
 ---
 
+## 2026-10-06 · BO-40 (post-merge re-review) · backend-qa-reviewer
+- After the BO-36 merge, `test/seed.e2e-spec.ts` runs the seed (which now recreates the current
+  seller's listings) while `test/listings.e2e-spec.ts` clears them and asserts the COMPLETED tab
+  is empty: a race between files. `vitest.config.e2e.ts` now sets `fileParallelism: false`, so
+  e2e spec files run one at a time. Keep it unless every spec stops sharing fixed rows.
+- Seed listing prices were written as COP amounts and are now USD: $25,000 dining table, $8,000
+  chair, $12,000 bookshelf, $5,000 lamp. Lower them when the seed is next touched (demo data only).
+
 ## 2026-10-06 · BO-40 · backend-qa-reviewer
 - `GET /listings` has no pagination params (`page`/`pageSize`): the sub-issue's contract is
   `{ data, meta: { total } }` only, and `ListingsService.findAllForSeller` hardcodes
