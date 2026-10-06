@@ -43,10 +43,14 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 |---|---|---|
 | `app` | — (scaffold health/root endpoint) | Exists (Nest scaffold) |
 | `prisma` | — (`PrismaService`, DB connection) | Exists |
-| `auth` | TBD (ERD) | Planned: login story. Design in [security.md](../rules/security.md#auth-design-mvp) |
+| `users` | `User` | Planned: login story (`AuthModule` reads users through `UsersService`) |
+| `auth` | — (JWT issuing/verification only) | Planned: login story. Design in [security.md](../rules/security.md#auth-design-mvp) |
+| `categories` | `Category` | Planned: A1 (`GET /categories`) |
+| `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Planned: A1 (`POST /listings`) |
 | *(domain modules)* | TBD | Added as features are agreed |
 
-Update this table in the same commit that adds a module or a model.
+Update this table in the same commit that adds a module or a model. `prisma/seed.ts` and test
+fixtures are outside Nest and may write any model directly.
 
 ## Dividing line between layers
 

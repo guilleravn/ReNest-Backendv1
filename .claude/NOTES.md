@@ -13,6 +13,26 @@ Format:
 
 ---
 
+## 2026-10-06 · BO-36 (DB foundation, review fixes) · backend-qa-reviewer
+
+- `readE2eDatabaseUrl` compares the two URLs as strings: the same database written differently
+  (other query string, host alias, quoting) passes the guard. Harmless today (specs only touch
+  their own rows and the seed upserts), but compare host/port/database name if e2e ever starts
+  truncating tables.
+
+## 2026-10-06 · BO-36 (DB foundation, review fixes) · main session
+
+- Code review fixes applied: opt-in seed on container start (`SEED_ON_START`), module ownership
+  table, whole-dollar CHECK (new migration, the first one was already pushed), lint/format now
+  cover `prisma/` and the config files, dedicated e2e database, buyer persona Camila in the seed.
+- Decided with the user: every price is USD regardless of country.
+- Deferred (not in this PR): the full BO-36 seed (listings in every category/condition/status,
+  photos, pickup options, no-rating/no-badge data) needs the remaining ERD tables (reservations,
+  seller_ratings, reception_checklists) and real photo objects in storage. The e2e job in CI was
+  dropped earlier by team decision; reopening it needs the team's agreement.
+- For A1's endpoints: Prisma returns `time` columns as `Date` on 1970-01-01 UTC. Serialize pickup
+  times as `"HH:mm"` and never apply a time zone conversion.
+
 ## 2026-10-06 · BO-36 (DB foundation) · backend-qa-reviewer
 
 - The DB-level half of the price and pickup option invariants is now proven by
