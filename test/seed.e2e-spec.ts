@@ -5,6 +5,11 @@ import { execSync } from 'node:child_process';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 
+import {
+  OTHER_SELLER_ID,
+  SEED_LISTING_IDS,
+  SEEDED_SELLER_ID,
+} from '../prisma/seed-fixtures.js';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
@@ -115,5 +120,50 @@ describe('Seed (e2e)', () => {
       expect(passwordHash).toMatch(/^\$argon2id\$/);
       await expect(argon2.verify(passwordHash, password)).resolves.toBe(true);
     }
+  });
+
+  it('gives Samuel the current-seller id and Valentina the other-seller id', async () => {
+    const users = await prisma.user.findMany({
+      where: { email: { in: ['samuel@renest.test', 'valentina@renest.test'] } },
+      select: { email: true, id: true },
+      orderBy: { email: 'asc' },
+    });
+
+    expect(users).toEqual([
+      { email: 'samuel@renest.test', id: SEEDED_SELLER_ID },
+      { email: 'valentina@renest.test', id: OTHER_SELLER_ID },
+    ]);
+  });
+
+  it('creates one listing per status for the current seller and one for the other seller, each with a cover photo and a pickup option', async () => {
+    const listings = await prisma.listing.findMany({
+      where: { id: { in: Object.values(SEED_LISTING_IDS) } },
+      select: {
+        id: true,
+        sellerId: true,
+        status: true,
+        photos: { select: { position: true } },
+        _count: { select: { pickupOptions: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    const expected = (
+      id: string,
+      sellerId: string,
+      status: 'ACTIVE' | 'PENDING' | 'COMPLETED',
+    ) => ({
+      id,
+      sellerId,
+      status,
+      photos: [{ position: 0 }],
+      _count: { pickupOptions: 1 },
+    });
+    expect(listings).toEqual([
+      expected(SEED_LISTING_IDS.active, SEEDED_SELLER_ID, 'ACTIVE'),
+      expected(SEED_LISTING_IDS.pending, SEEDED_SELLER_ID, 'PENDING'),
+      expected(SEED_LISTING_IDS.completed, SEEDED_SELLER_ID, 'COMPLETED'),
+      expected(SEED_LISTING_IDS.otherSellerActive, OTHER_SELLER_ID, 'ACTIVE'),
+    ]);
   });
 });
