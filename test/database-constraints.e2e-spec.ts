@@ -88,6 +88,12 @@ describe('Database constraints (e2e)', () => {
       ).rejects.toThrow(/listings_price_cents_check/);
     });
 
+    it('rejects a listing price that is not a whole number of dollars', async () => {
+      await expect(
+        prisma.listing.create({ data: { ...validListing(), priceCents: 150 } }),
+      ).rejects.toThrow(/listings_price_cents_whole_dollars_check/);
+    });
+
     it('rejects a listing with a zero or negative price', async () => {
       await expect(
         prisma.listing.create({ data: { ...validListing(), priceCents: 0 } }),

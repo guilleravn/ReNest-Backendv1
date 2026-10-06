@@ -65,7 +65,7 @@ Table listings {
   title         varchar(120) [not null]
   description   text [note: 'Optional in the create form (UI marks it "Opcional"): NULL when not given']
   condition     listing_condition [not null]
-  price_cents   int [not null, note: 'USD minor units (database.md); the MVP is single-currency, so there is no currency column. CHECK (price_cents >= 100): at least $1']
+  price_cents   int [not null, note: 'USD minor units (database.md); the MVP is single-currency, so there is no currency column. CHECK (price_cents >= 100): at least $1. CHECK (price_cents % 100 = 0): whole dollars']
   status        listing_status [not null, default: 'ACTIVE']
   published_at  timestamptz [not null, default: `now()`]
   created_at    timestamptz [not null, default: `now()`]

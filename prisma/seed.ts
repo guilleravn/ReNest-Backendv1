@@ -31,6 +31,14 @@ const USERS = [
     city: 'Ciudad de México',
     verifiedAt: null,
   },
+  // The buyer persona used by the Gherkin scenarios, the login story and the e2e tests.
+  {
+    email: 'camila@renest.test',
+    fullName: 'Camila Torres',
+    phoneE164: '+525500000003',
+    city: 'Ciudad de México',
+    verifiedAt: null,
+  },
   // No phone on purpose: exercises the WhatsApp "can't be reached" fallback.
   {
     email: 'tomas@renest.test',

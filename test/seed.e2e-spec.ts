@@ -10,6 +10,7 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 
 const SEED_SLUGS = ['electronics', 'furniture', 'home'];
 const SEED_EMAILS = [
+  'camila@renest.test',
   'samuel@renest.test',
   'tomas@renest.test',
   'valentina@renest.test',
@@ -56,7 +57,7 @@ describe('Seed (e2e)', () => {
     ]);
   });
 
-  it('creates exactly the three accounts once when run twice', async () => {
+  it('creates exactly the four accounts once when run twice', async () => {
     const users = await prisma.user.findMany({
       where: { email: { in: SEED_EMAILS } },
       select: { email: true, phoneE164: true, isVerified: true },
@@ -64,6 +65,11 @@ describe('Seed (e2e)', () => {
     });
 
     expect(users).toEqual([
+      {
+        email: 'camila@renest.test',
+        phoneE164: '+525500000003',
+        isVerified: false,
+      },
       {
         email: 'samuel@renest.test',
         phoneE164: '+525500000001',
@@ -86,6 +92,7 @@ describe('Seed (e2e)', () => {
     });
 
     expect(users).toEqual([
+      { email: 'camila@renest.test', verifiedAt: null },
       {
         email: 'samuel@renest.test',
         verifiedAt: new Date('2026-10-01T00:00:00.000Z'),
