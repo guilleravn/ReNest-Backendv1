@@ -96,3 +96,6 @@ not count, and permission to commit is not permission to push.
 - CI (`.github/workflows/ci.yml`) runs lint, format check, typecheck and tests automatically on
   every PR into `develop` — it does not run on plain pushes to feature branches. A PR cannot merge
   until CI passes and at least one collaborator (not the author) approves it.
+- Merge with **squash merge**: every PR collapses into a single commit on `develop`, regardless of
+  how many commits the branch had. Use the PR title (`[BO-27] Add listing status filter`) as the
+  squashed commit's message.
