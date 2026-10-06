@@ -141,13 +141,15 @@ The rules below are **agreed** (MVP scope). **Requires** names the mechanism def
 
 ### A user's city is one of the fixed zones
 - **Requires**: `RegisterDto.city` with `@IsIn(USER_ZONES)` (`src/users/user-zones.ts`); the seed
-  uses the same list (typed against it). No DB constraint: the list is expected to change with
+  uses the same list (typed against it), and the frontend reads it from `GET /zones`, so there is
+  one copy. No DB constraint: the list is expected to change with
   the product and lives in code.
 - **Protects**: the city shown as the listing location on cards and detail is consistent and
   filterable, not free text.
 - **Fails as**: misspelled or invented cities on listings.
 - **Tested by**: `src/auth/dto/register.dto.spec.ts`, `test/auth.e2e-spec.ts` (`returns 400 when
-  the city is not one of the zones`), `test/seed.e2e-spec.ts` (seeded accounts).
+  the city is not one of the zones`, `serves GET /zones…`), `test/seed.e2e-spec.ts` (seeded
+  accounts).
 
 Decided 2026-10-06: every price is in USD, whatever the country of the seller or buyer (confirmed
 by the product owner); `description` is optional (NULL when not given).

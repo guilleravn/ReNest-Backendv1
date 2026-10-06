@@ -11,7 +11,6 @@ const INPUT = {
   fullName: 'Lucía Méndez',
   city: 'Condesa, CDMX',
   phoneE164: null,
-  termsAcceptedAt: new Date('2026-10-06T12:00:00.000Z'),
 };
 
 // The real unique constraint is covered by test/auth.e2e-spec.ts against the real database.

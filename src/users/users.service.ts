@@ -24,7 +24,6 @@ export interface CreateUserInput {
   fullName: string;
   city: string;
   phoneE164: string | null;
-  termsAcceptedAt: Date;
 }
 
 const UNIQUE_VIOLATION = 'P2002';

@@ -25,8 +25,7 @@ interface SeedUser {
   verifiedAt: Date | null;
 }
 
-// `city` must be one of USER_ZONES, like any account created through sign-up. `termsAcceptedAt`
-// stays NULL: these accounts predate the terms checkbox.
+// `city` must be one of USER_ZONES, like any account created through sign-up.
 const USERS = [
   {
     email: 'samuel@renest.test',

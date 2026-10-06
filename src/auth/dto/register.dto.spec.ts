@@ -11,7 +11,6 @@ const validBody = () => ({
   city: 'Condesa, CDMX',
   phoneE164: '+52 (55) 1234-5678',
   password: 'correct-horse',
-  acceptedTerms: true,
 });
 
 const toDto = (body: Record<string, unknown>) =>
@@ -56,15 +55,6 @@ describe('RegisterDto', () => {
     await expect(
       failedProperties({ ...validBody(), city: 'Ciudad de México' }),
     ).resolves.toEqual(['city']);
-  });
-
-  it('rejects the body when the terms are not accepted', async () => {
-    await expect(
-      failedProperties({ ...validBody(), acceptedTerms: false }),
-    ).resolves.toEqual(['acceptedTerms']);
-    await expect(
-      failedProperties({ ...validBody(), acceptedTerms: 'true' }),
-    ).resolves.toEqual(['acceptedTerms']);
   });
 
   it('rejects a password shorter than 8 characters', async () => {

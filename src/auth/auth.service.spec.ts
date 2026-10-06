@@ -132,7 +132,6 @@ describe('AuthService', () => {
         city: 'Condesa, CDMX',
         phoneE164: undefined,
         password: PASSWORD,
-        acceptedTerms: true,
       });
 
     it('creates the user with an argon2id hash and returns a token for it', async () => {
@@ -146,7 +145,6 @@ describe('AuthService', () => {
         fullName: 'Lucía Méndez',
         city: 'Condesa, CDMX',
         phoneE164: null,
-        termsAcceptedAt: NOW,
       });
       const { passwordHash: storedHash } = usersService.create.mock.calls[0][0];
       await expect(argon2.verify(storedHash, PASSWORD)).resolves.toBe(true);

@@ -1,6 +1,5 @@
 import { Transform } from 'class-transformer';
 import {
-  Equals,
   IsEmail,
   IsIn,
   IsOptional,
@@ -52,7 +51,4 @@ export class RegisterDto {
   @MinLength(MIN_PASSWORD_LENGTH)
   @MaxLength(MAX_PASSWORD_LENGTH)
   password: string;
-
-  @Equals(true)
-  acceptedTerms: boolean;
 }

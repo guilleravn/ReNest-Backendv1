@@ -59,7 +59,6 @@ export class AuthService {
       fullName: dto.fullName,
       city: dto.city,
       phoneE164: dto.phoneE164 ?? null,
-      termsAcceptedAt: new Date(),
     });
     this.logger.log(`User ${id} registered`);
 

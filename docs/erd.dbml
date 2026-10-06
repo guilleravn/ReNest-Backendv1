@@ -46,7 +46,6 @@ Table users {
   city          varchar(100) [not null, note: 'PUBLIC. Shown as the listing location on cards and detail (sellers have no per-listing area field). One of USER_ZONES (src/users/user-zones.ts), enforced by the sign-up DTO']
   is_verified   boolean [not null, default: false, note: 'Set manually by the ReNest team']
   verified_at   timestamptz
-  terms_accepted_at timestamptz [note: 'Set at sign-up. NULL for the seeded accounts, which predate the terms checkbox']
   created_at    timestamptz [not null, default: `now()`]
   updated_at    timestamptz [not null, default: `now()`]
 }
