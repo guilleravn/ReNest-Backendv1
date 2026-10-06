@@ -27,6 +27,8 @@ describe('validateEnv', () => {
       NODE_ENV: 'development',
       TRUST_PROXY: 'loopback',
       ARGON2_MAX_CONCURRENCY: 4,
+      CREDENTIALS_IP_LIMIT: 20,
+      CREDENTIALS_GLOBAL_LIMIT: 100,
     });
   });
 
@@ -49,6 +51,8 @@ describe('validateEnv', () => {
       NODE_ENV: 'development',
       TRUST_PROXY: 'loopback',
       ARGON2_MAX_CONCURRENCY: 4,
+      CREDENTIALS_IP_LIMIT: 20,
+      CREDENTIALS_GLOBAL_LIMIT: 100,
       UNRELATED: 'x',
     });
   });
@@ -117,6 +121,38 @@ describe('validateEnv', () => {
     },
   );
 
+  it('defaults the credential limits to 20 per IP and 100 globally', () => {
+    expect(validateEnv(REQUIRED)).toMatchObject({
+      CREDENTIALS_IP_LIMIT: 20,
+      CREDENTIALS_GLOBAL_LIMIT: 100,
+    });
+  });
+
+  it('reads CREDENTIALS_IP_LIMIT and CREDENTIALS_GLOBAL_LIMIT as integers', () => {
+    expect(
+      validateEnv({
+        ...REQUIRED,
+        CREDENTIALS_IP_LIMIT: '1000',
+        CREDENTIALS_GLOBAL_LIMIT: '1000',
+      }),
+    ).toMatchObject({
+      CREDENTIALS_IP_LIMIT: 1000,
+      CREDENTIALS_GLOBAL_LIMIT: 1000,
+    });
+  });
+
+  it.each(['CREDENTIALS_IP_LIMIT', 'CREDENTIALS_GLOBAL_LIMIT'])(
+    'throws when %s is below 1 or not an integer',
+    (name) => {
+      expect(() => validateEnv({ ...REQUIRED, [name]: '0' })).toThrow(
+        new RegExp(`${name} must not be less than 1`),
+      );
+      expect(() => validateEnv({ ...REQUIRED, [name]: '2.5' })).toThrow(
+        new RegExp(`${name} must be an integer number`),
+      );
+    },
+  );
+
   it('defaults the global throttler to 1000 requests per 60000 ms', () => {
     expect(validateEnv(REQUIRED)).toMatchObject({
       THROTTLE_TTL_MS: 60000,
@@ -151,6 +187,8 @@ describe('validateEnv', () => {
       NODE_ENV: 'development',
       TRUST_PROXY: 'loopback',
       ARGON2_MAX_CONCURRENCY: 4,
+      CREDENTIALS_IP_LIMIT: 20,
+      CREDENTIALS_GLOBAL_LIMIT: 100,
     });
   });
 

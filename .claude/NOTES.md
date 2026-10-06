@@ -13,6 +13,15 @@ Format:
 
 ---
 
+## 2026-10-06 · A9 / BO-39 (configurable credential limits) · backend-issue-implementer
+
+- The per-IP (20) and global (100) login/sign-up limits are now env vars
+  (`CREDENTIALS_IP_LIMIT`, `CREDENTIALS_GLOBAL_LIMIT`); `credentialsThrottlers(limits)` replaces
+  the `CREDENTIALS_THROTTLERS` constant. Only `docker-compose.yml`'s `api` service raises them
+  (1000 each): the frontend Playwright suite sends every request from one forwarded IP and got 429
+  on 43/70 tests. Per IP + email stays hardcoded at 5. `start:dev` and the backend e2e suite use
+  the defaults; a local `.env` needs nothing new.
+
 ## 2026-10-06 · A9 / BO-39 (merge of develop with BO-27/BO-40) · main session
 
 - Merged `origin/develop` (BO-27 `GET /listings`) into `feat/a9-auth` instead of rebasing: the

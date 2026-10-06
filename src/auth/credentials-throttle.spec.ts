@@ -1,11 +1,9 @@
 import { ExecutionContext } from '@nestjs/common';
 
 import {
-  CREDENTIALS_GLOBAL_LIMIT,
   CREDENTIALS_IP_EMAIL_LIMIT,
-  CREDENTIALS_IP_LIMIT,
   CREDENTIALS_THROTTLE_TTL_MS,
-  CREDENTIALS_THROTTLERS,
+  credentialsThrottlers,
   CredentialsThrottle,
   trackByIp,
   trackByIpAndEmail,
@@ -77,7 +75,12 @@ describe('trackByIpAndEmail', () => {
   });
 });
 
-describe('CREDENTIALS_THROTTLERS', () => {
+const CREDENTIALS_THROTTLERS = credentialsThrottlers({
+  ipLimit: 20,
+  globalLimit: 100,
+});
+
+describe('credentialsThrottlers', () => {
   it('defines the three layered limits over the same window', () => {
     expect(
       CREDENTIALS_THROTTLERS.map(({ name, limit, ttl }) => ({
@@ -93,20 +96,24 @@ describe('CREDENTIALS_THROTTLERS', () => {
       },
       {
         name: 'credentials-ip',
-        limit: CREDENTIALS_IP_LIMIT,
+        limit: 20,
         ttl: CREDENTIALS_THROTTLE_TTL_MS,
       },
       {
         name: 'credentials-global',
-        limit: CREDENTIALS_GLOBAL_LIMIT,
+        limit: 100,
         ttl: CREDENTIALS_THROTTLE_TTL_MS,
       },
     ]);
-    expect([
-      CREDENTIALS_IP_EMAIL_LIMIT,
-      CREDENTIALS_IP_LIMIT,
-      CREDENTIALS_GLOBAL_LIMIT,
-    ]).toEqual([5, 20, 100]);
+    expect(CREDENTIALS_IP_EMAIL_LIMIT).toBe(5);
+  });
+
+  it('uses the configured per-IP and global limits and keeps per IP + email at 5', () => {
+    expect(
+      credentialsThrottlers({ ipLimit: 1000, globalLimit: 2000 }).map(
+        ({ limit }) => limit,
+      ),
+    ).toEqual([5, 1000, 2000]);
   });
 
   it('tracks the global limiter with one key for every client', () => {

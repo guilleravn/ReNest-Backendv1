@@ -57,11 +57,16 @@ it needs a new decision.
     (defaults 1000 / 60 s). A coarse safety net.
   - Login and sign-up (`@CredentialsThrottle()`) additionally get three layered limits, **all
     applied together** and shared by both routes (`src/auth/credentials-throttle.ts`):
-    1. per client IP + normalized email, 5 / 60 s: slows guessing one account's password;
-    2. per client IP, 20 / 60 s: stops one client from rotating emails;
-    3. across all clients (one fixed key), 100 / 60 s: caps argon2 work and account creation
+    1. per client IP + normalized email, 5 / 60 s (fixed): slows guessing one account's password;
+    2. per client IP, `CREDENTIALS_IP_LIMIT` / 60 s (default 20): stops one client from rotating
+       emails;
+    3. across all clients (one fixed key), `CREDENTIALS_GLOBAL_LIMIT` / 60 s (default 100): caps
+       argon2 work and account creation
        even when an attacker rotates both emails and IPs. It can also block legitimate logins
        for up to a minute during such an attack; accepted for the MVP's traffic.
+  - Limits 2 and 3 are configurable only so the local Docker stack (`docker-compose.yml`, 1000
+    each) can serve the frontend's e2e suite, whose requests all come from one client IP. Every
+    other environment, production included, keeps the defaults. Limit 1 stays fixed.
   - The credential throttlers use `skipIf` so they never apply to other routes, and the
     `default` throttler is never overridden on credential routes.
   - **Remaining lockout trade-off**: keying by IP + email means an attacker elsewhere cannot lock

@@ -1,6 +1,6 @@
 // Throttling guarantees that need a non-default configuration, so this spec boots its own app:
 // - a low global `default` limit, to prove it still applies on the credential routes (the credential
-//   throttlers are added on top, never replace it);
+//   throttlers are added on top, never replace it), plus a raised CREDENTIALS_IP_LIMIT read from env;
 // - TRUST_PROXY set to an address supertest never connects from, to prove X-Forwarded-For from an
 //   untrusted source is ignored (a client cannot pick its own IP to dodge the per-IP limits).
 // Env vars are set before AppModule is imported: ConfigModule validates them at import time.
@@ -12,7 +12,10 @@ import { getStorageToken, ThrottlerStorageService } from '@nestjs/throttler';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 
-const GLOBAL_LIMIT = 8;
+// Above the default per-IP credential limit (20), so the login loop below also proves that
+// CREDENTIALS_IP_LIMIT from the env reaches the throttler (it would 429 at the 21st request).
+const GLOBAL_LIMIT = 24;
+const CREDENTIALS_IP_LIMIT = 1000;
 // Supertest connects from loopback; only this unrelated address may forward a client IP.
 const ONLY_TRUSTED_PROXY = '192.0.2.10';
 const EMAIL_DOMAIN = 'throttling-e2e.renest.test';
@@ -22,6 +25,7 @@ describe('Throttling (e2e)', () => {
   const saved = {
     THROTTLE_LIMIT: process.env['THROTTLE_LIMIT'],
     TRUST_PROXY: process.env['TRUST_PROXY'],
+    CREDENTIALS_IP_LIMIT: process.env['CREDENTIALS_IP_LIMIT'],
   };
 
   const uniqueEmail = (): string => `user-${randomUUID()}@${EMAIL_DOMAIN}`;
@@ -38,6 +42,7 @@ describe('Throttling (e2e)', () => {
   beforeAll(async () => {
     process.env['THROTTLE_LIMIT'] = String(GLOBAL_LIMIT);
     process.env['TRUST_PROXY'] = ONLY_TRUSTED_PROXY;
+    process.env['CREDENTIALS_IP_LIMIT'] = String(CREDENTIALS_IP_LIMIT);
     const { AppModule } = await import('../src/app.module.js');
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -63,7 +68,7 @@ describe('Throttling (e2e)', () => {
 
   describe('global default throttler', () => {
     it('still applies on POST /auth/login on top of the credential limits', async () => {
-      // Different emails, below the per-IP credential limit (20): only `default` can trip.
+      // Different emails, below the configured per-IP credential limit: only `default` can trip.
       for (let i = 0; i < GLOBAL_LIMIT; i += 1) {
         await login(uniqueEmail()).expect(400);
       }

@@ -27,6 +27,8 @@ const JWT_EXPIRES_IN_PATTERN = /^\d+(ms|s|m|h|d|w|y)$/;
 const MIN_THROTTLE_VALUE = 1;
 const DEFAULT_THROTTLE_TTL_MS = 60_000;
 const DEFAULT_THROTTLE_LIMIT = 1000;
+const DEFAULT_CREDENTIALS_IP_LIMIT = 20;
+const DEFAULT_CREDENTIALS_GLOBAL_LIMIT = 100;
 const DEFAULT_TRUST_PROXY = 'loopback';
 const MIN_ARGON2_CONCURRENCY = 1;
 const MAX_ARGON2_CONCURRENCY = 64;
@@ -72,6 +74,17 @@ export class EnvironmentVariables {
   @IsInt()
   @Min(MIN_THROTTLE_VALUE)
   THROTTLE_LIMIT: number = DEFAULT_THROTTLE_LIMIT;
+
+  // Login/sign-up limits per 60 s (auth/credentials-throttle.ts): per client IP, and across all
+  // clients. Keep the defaults in production; only the local Docker stack raises them, because the
+  // frontend's e2e suite sends every request from one client IP. (Per IP + email stays fixed at 5.)
+  @IsInt()
+  @Min(MIN_THROTTLE_VALUE)
+  CREDENTIALS_IP_LIMIT: number = DEFAULT_CREDENTIALS_IP_LIMIT;
+
+  @IsInt()
+  @Min(MIN_THROTTLE_VALUE)
+  CREDENTIALS_GLOBAL_LIMIT: number = DEFAULT_CREDENTIALS_GLOBAL_LIMIT;
 
   // Which proxies may set the client IP through X-Forwarded-For (Express `trust proxy`). Default:
   // only loopback, i.e. a Next.js server on the same host. See config/trust-proxy.ts.

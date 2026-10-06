@@ -7,7 +7,7 @@ import type { Express } from 'express';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
-import { CREDENTIALS_THROTTLERS } from './auth/credentials-throttle.js';
+import { credentialsThrottlers } from './auth/credentials-throttle.js';
 import { JwtAuthGuard } from './auth/jwt-auth.guard.js';
 import { EnvironmentVariables, validateEnv } from './config/env.validation.js';
 import { parseTrustProxy } from './config/trust-proxy.js';
@@ -31,7 +31,12 @@ export const DEFAULT_THROTTLER = 'default';
             ttl: config.get('THROTTLE_TTL_MS', { infer: true }),
           },
           // Only routes marked @CredentialsThrottle() (login, sign-up); they stack on the default.
-          ...CREDENTIALS_THROTTLERS,
+          ...credentialsThrottlers({
+            ipLimit: config.get('CREDENTIALS_IP_LIMIT', { infer: true }),
+            globalLimit: config.get('CREDENTIALS_GLOBAL_LIMIT', {
+              infer: true,
+            }),
+          }),
         ],
       }),
     }),
