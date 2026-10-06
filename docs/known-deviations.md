@@ -11,7 +11,4 @@ and remove the entry here in the same commit.
   imports `'./../src/app.module.js'` (the `./` is redundant).
 - `src/app.controller.spec.ts`: `it('should return ...')` instead of the
   `it('<returns…> when…')` style. It is scaffold; not worth touching in isolation.
-- `prisma.config.ts` uses double quotes and is outside `npm run format` and `npm run lint` (both
-  only cover `src/` and `test/`); same for `vitest.config*.ts` and `prisma/seed.ts` (formatted by
-  hand with Prettier, but not checked by the hook).
 - `.oxlintrc.json` disables `typescript/no-explicit-any`: the linter does not catch `any`; QA does.
