@@ -49,6 +49,14 @@ These rules apply from the auth slice onwards. Entry format: see
 - **Protects**: users cannot read or modify other users' resources by changing an ID.
 - **Fails as**: IDOR: user A edits or deletes user B's data.
 
+### Phone numbers are only exposed where a story needs them
+- **Requires**: response DTOs with an explicit `select`. The seller's `phoneE164` is returned with
+  the listing detail / seller snapshot (WhatsApp contact, B5) and may be `null` (the client shows
+  the fallback). The buyer's `phoneE164` is returned only to the seller of that buyer's
+  reservation (C9). No other endpoint returns another user's phone.
+- **Protects**: buyers' contact details; a buyer only shares their phone by reserving.
+- **Fails as**: any authenticated user harvests buyers' phone numbers through the API.
+
 ### All input is validated and unknown fields are rejected
 - **Requires**: global `ValidationPipe` with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`, and DTOs with `class-validator` decorators. (Not installed yet; added with the first endpoint slice.)
 - **Protects**: services only receive well-formed, expected input; clients cannot set fields like `id`, `role` or `sellerId`.

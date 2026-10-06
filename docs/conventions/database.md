@@ -5,11 +5,10 @@ fields and tables: [naming.md](naming.md). Setup and versions: [architecture.md]
 
 ## Source of truth
 
-There is no separate ERD yet, so `prisma/schema.prisma` is the source of truth. If an ERD is added
-under `docs/reference/`, any Prisma schema change must update the ERD in the same slice.
-
-**Data model: not yet defined.** It will be designed as an ERD (first task after setup). Do not
-invent tables; they get added slice by slice as features are agreed.
+The data model is designed in [docs/erd.dbml](../erd.dbml). Until the first migration exists,
+the ERD is the source of truth; from then on `prisma/schema.prisma` is, and any schema change
+updates the ERD in the same slice. Do not invent tables or columns that are not in the ERD; tables
+get added to the schema slice by slice as features are implemented.
 
 ## Model template
 
@@ -39,6 +38,10 @@ model Listing {
   own identity). `@@index` on every FK that is filtered on (Postgres does not index FKs by itself).
 - **Invariants in the DB** whenever possible: `@unique`/`@@unique`, `NOT NULL`, enums. DTO
   validation does not replace the constraint.
+- **CHECK constraints**: Prisma does not generate them. Create the migration with
+  `npm run prisma:migrate -- --name <name> --create-only`, add the `ALTER TABLE ... ADD CONSTRAINT
+  ... CHECK (...)` by hand to the generated SQL, then apply it. The ERD marks each one as
+  `CHECK (...)`.
 - Index/constraint names: the ones Prisma generates; do not set them by hand unless they conflict.
 
 ## Money
