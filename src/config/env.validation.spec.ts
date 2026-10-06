@@ -3,57 +3,134 @@ import 'reflect-metadata';
 import { EnvironmentVariables, validateEnv } from './env.validation.js';
 
 const DATABASE_URL = 'postgresql://user:pass@localhost:5432/db?schema=public';
+const JWT_SECRET = 'unit-test-secret-at-least-32-characters-long';
+const REQUIRED = { DATABASE_URL, JWT_SECRET };
 
 describe('validateEnv', () => {
   it('returns typed variables when the environment is valid', () => {
-    const env = validateEnv({ PORT: '8080', DATABASE_URL });
+    const env = validateEnv({ ...REQUIRED, PORT: '8080' });
 
     expect(env).toBeInstanceOf(EnvironmentVariables);
-    expect(env).toEqual({ PORT: 8080, DATABASE_URL });
+    expect(env).toEqual({
+      PORT: 8080,
+      DATABASE_URL,
+      JWT_SECRET,
+      JWT_EXPIRES_IN: '7d',
+      THROTTLE_TTL_MS: 60000,
+      THROTTLE_LIMIT: 1000,
+    });
   });
 
   it('defaults PORT to 3000 when it is not set', () => {
-    const env = validateEnv({ DATABASE_URL });
+    const env = validateEnv(REQUIRED);
 
     expect(env.PORT).toBe(3000);
   });
 
   it('passes unrelated variables through without failing', () => {
-    const env = validateEnv({ DATABASE_URL, UNRELATED: 'x' });
+    const env = validateEnv({ ...REQUIRED, UNRELATED: 'x' });
 
-    expect(env).toEqual({ PORT: 3000, DATABASE_URL, UNRELATED: 'x' });
+    expect(env).toEqual({
+      PORT: 3000,
+      DATABASE_URL,
+      JWT_SECRET,
+      JWT_EXPIRES_IN: '7d',
+      THROTTLE_TTL_MS: 60000,
+      THROTTLE_LIMIT: 1000,
+      UNRELATED: 'x',
+    });
   });
 
   it('throws when DATABASE_URL is missing', () => {
-    expect(() => validateEnv({ PORT: '3000' })).toThrow(
+    expect(() => validateEnv({ PORT: '3000', JWT_SECRET })).toThrow(
       /Invalid environment variables: .*DATABASE_URL/,
     );
   });
 
   it('throws when DATABASE_URL is empty', () => {
-    expect(() => validateEnv({ DATABASE_URL: '' })).toThrow(
+    expect(() => validateEnv({ DATABASE_URL: '', JWT_SECRET })).toThrow(
       /DATABASE_URL should not be empty/,
     );
   });
 
   it('throws when PORT is not a number', () => {
-    expect(() => validateEnv({ PORT: 'abc', DATABASE_URL })).toThrow(
+    expect(() => validateEnv({ ...REQUIRED, PORT: 'abc' })).toThrow(
       /PORT must be an integer number/,
     );
   });
 
   it('throws when PORT is out of range', () => {
-    expect(() => validateEnv({ PORT: '70000', DATABASE_URL })).toThrow(
+    expect(() => validateEnv({ ...REQUIRED, PORT: '70000' })).toThrow(
       /PORT must not be greater than 65535/,
     );
-    expect(() => validateEnv({ PORT: '0', DATABASE_URL })).toThrow(
+    expect(() => validateEnv({ ...REQUIRED, PORT: '0' })).toThrow(
       /PORT must not be less than 1/,
     );
   });
 
   it('throws when PORT is not an integer', () => {
-    expect(() => validateEnv({ PORT: '3000.5', DATABASE_URL })).toThrow(
+    expect(() => validateEnv({ ...REQUIRED, PORT: '3000.5' })).toThrow(
       /PORT must be an integer number/,
     );
   });
+
+  it('throws when JWT_SECRET is missing', () => {
+    expect(() => validateEnv({ DATABASE_URL })).toThrow(
+      /Invalid environment variables: .*JWT_SECRET/,
+    );
+  });
+
+  it('throws when JWT_SECRET is shorter than 32 characters', () => {
+    expect(() =>
+      validateEnv({ DATABASE_URL, JWT_SECRET: 'too-short-secret' }),
+    ).toThrow(/JWT_SECRET must be longer than or equal to 32 characters/);
+  });
+
+  it('defaults JWT_EXPIRES_IN to 7d when it is not set', () => {
+    expect(validateEnv(REQUIRED).JWT_EXPIRES_IN).toBe('7d');
+  });
+
+  it('accepts JWT_EXPIRES_IN as a number with a unit', () => {
+    expect(
+      validateEnv({ ...REQUIRED, JWT_EXPIRES_IN: '12h' }).JWT_EXPIRES_IN,
+    ).toBe('12h');
+  });
+
+  it.each(['604800', '7 days', '7D', ''])(
+    'throws when JWT_EXPIRES_IN is %j',
+    (JWT_EXPIRES_IN) => {
+      expect(() => validateEnv({ ...REQUIRED, JWT_EXPIRES_IN })).toThrow(
+        /JWT_EXPIRES_IN must be a duration with a unit/,
+      );
+    },
+  );
+
+  it('defaults the global throttler to 1000 requests per 60000 ms', () => {
+    expect(validateEnv(REQUIRED)).toMatchObject({
+      THROTTLE_TTL_MS: 60000,
+      THROTTLE_LIMIT: 1000,
+    });
+  });
+
+  it('reads THROTTLE_TTL_MS and THROTTLE_LIMIT as integers', () => {
+    expect(
+      validateEnv({
+        ...REQUIRED,
+        THROTTLE_TTL_MS: '30000',
+        THROTTLE_LIMIT: '50',
+      }),
+    ).toMatchObject({ THROTTLE_TTL_MS: 30000, THROTTLE_LIMIT: 50 });
+  });
+
+  it.each(['THROTTLE_TTL_MS', 'THROTTLE_LIMIT'])(
+    'throws when %s is below 1 or not an integer',
+    (name) => {
+      expect(() => validateEnv({ ...REQUIRED, [name]: '0' })).toThrow(
+        new RegExp(`${name} must not be less than 1`),
+      );
+      expect(() => validateEnv({ ...REQUIRED, [name]: 'abc' })).toThrow(
+        new RegExp(`${name} must be an integer number`),
+      );
+    },
+  );
 });

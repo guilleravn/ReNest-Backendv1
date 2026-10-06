@@ -13,6 +13,40 @@ Format:
 
 ---
 
+## 2026-10-06 · A9 (auth) · backend-qa-reviewer
+
+- `JWT_SECRET` is now required at startup: a local `.env` created before A9 makes `start:dev`,
+  the e2e suite and the Docker `api` container fail until it is copied from `.env.example` (only
+  the `THROTTLE_*` vars have defaults). CI needs nothing today (it runs unit tests only and none
+  boot `AppModule`), but reinstating the e2e job means adding `JWT_SECRET` to its env.
+- On login/sign-up, every request without a usable email (missing body, non-string email) shares
+  one per-IP bucket of 5 / 60 s. All traffic comes from the Next.js server, so those malformed
+  requests share it across users; harmless (they are 400s anyway), but keep it in mind when
+  adding e2e cases that omit the email (see the comment in `test/auth.e2e-spec.ts`).
+
+## 2026-10-06 · A9 (auth) · backend-issue-implementer
+
+- Per-email throttling uses the library's per-route tracker (`@Throttle({ default: { limit,
+  ttl, getTracker } })`, `src/auth/credentials-throttle.ts`) instead of a custom guard subclass
+  overriding `getTracker`: same behavior, no extra guard. On login/register it **replaces** the
+  global per-IP limit (it does not stack), and login and register count separately (the key
+  includes the handler).
+- Follow-up decided by the main session: the global per-IP limit sees only the Next.js server's IP,
+  so it applies to all users combined. It is now configurable (`THROTTLE_LIMIT`, default 1000;
+  `THROTTLE_TTL_MS`, default 60000) and documented as a coarse safety net; the per-email
+  credentials limit (5 / 60 s) stays hardcoded. The two throttle vars are optional (defaults
+  apply); `JWT_SECRET` is still required, see above.
+- `JWT_EXPIRES_IN` must carry a unit (`7d`, `12h`; validated at startup): jsonwebtoken reads a bare
+  numeric string as **milliseconds**, so `604800` would silently mean ~10 minutes.
+- `UsersService.create` maps **any** P2002 to 409 without inspecting `meta.target` (its shape
+  differs with the pg driver adapter); `email` is the only caller-controlled unique column.
+- `GET /auth/me` 401s for a valid token whose user was deleted; the global guard itself does not hit
+  the DB, so other protected routes must not assume `@CurrentUser()` still exists.
+- Seed: `termsAcceptedAt` left NULL for the seeded accounts; cities typed against `UserZone`
+  (type-only import from `src/users/user-zones.ts`, so tsx does not load `src/` at runtime).
+  Existing dev databases keep the old cities until `npm run db:seed` is re-run.
+- Docs also updated beyond the brief's list: `docs/conventions/testing.md` (said "no sign-up").
+
 ## 2026-10-06 · BO-36 (DB foundation, review fixes) · backend-qa-reviewer
 
 - `readE2eDatabaseUrl` compares the two URLs as strings: the same database written differently

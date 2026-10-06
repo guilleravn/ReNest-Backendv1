@@ -21,8 +21,9 @@ logic beyond calling the service.
 
 **E2E**: required for critical paths, against a real Postgres database (not mocked), covering the
 happy path + the 400/401/403/404/409 cases of the contract:
-- **Auth**: login (valid credentials, wrong password, unknown email), accessing a protected route
-  with and without a valid token. There is no sign-up in the MVP.
+- **Auth**: login (valid credentials, wrong password, unknown email), sign-up (created, duplicate
+  email), accessing a protected route with and without a valid token. Use a unique email per test:
+  login and sign-up are throttled per email (5 req / 60 s).
 - **The main business flow**: publish a listing → reserve it with a pickup option → confirm
   handover → confirm reception.
 - **Anything involving money or payments**, if/when the domain gets it.

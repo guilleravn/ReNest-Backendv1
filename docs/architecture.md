@@ -16,9 +16,10 @@ or infrastructure. It describes what is installed, not what is planned.
 | Database | PostgreSQL | 17 (Docker, local) | `docker-compose.yml` |
 | Config | `@nestjs/config` | 12.0 | Global; env validated at startup by `src/config/env.validation.ts` |
 | Validation | `class-validator` + `class-transformer` (+ `@nestjs/mapped-types`) | 0.15 / 0.5 / 12.0 | Global `ValidationPipe` registered as `APP_PIPE` in `AppModule` |
-| HTTP hardening | `helmet` | 8.x | In `main.ts`. Throttler and CORS: see [known-deviations.md](known-deviations.md) |
-| Password hashing | `argon2` (argon2id) | 0.45 | Used by the seed today; the login slice reuses it |
-| Auth | Own JWT (`@nestjs/jwt`), login only | — | **Not implemented yet.** Design: [security.md](rules/security.md#auth-design-mvp) |
+| HTTP hardening | `helmet` | 8.x | In `main.ts`. CORS: see [known-deviations.md](known-deviations.md) |
+| Rate limiting | `@nestjs/throttler` | 6.7 | Global `ThrottlerGuard` (`APP_GUARD`): `THROTTLE_LIMIT` req / `THROTTLE_TTL_MS` per IP (default 1000 / 60 s; coarse safety net, all traffic comes from the Next.js server); login and sign-up fixed 5 req / 60 s per email. See [security.md](rules/security.md#auth-design-mvp) |
+| Password hashing | `argon2` (argon2id) | 0.45 | Sign-up, login and the seed |
+| Auth | Own JWT (`@nestjs/jwt`): login + sign-up | 12.0 | Global `JwtAuthGuard` (`APP_GUARD`), `@Public()`, `@CurrentUser()`. Design: [security.md](rules/security.md#auth-design-mvp) |
 | Seed runner | `tsx` | 4.x | Runs `prisma/seed.ts` (`npm run db:seed`) |
 | Job queue | None | — | |
 | Tests | Vitest + Supertest | 4.1 / 7.x | |
@@ -34,7 +35,7 @@ Prisma specifics:
   build entry is `dist/src/main.js` (`nest-cli.json` `entryFile`, `npm run start:prod`). CI runs
   `npm run prisma:generate` before typecheck/tests.
 - **Seed** (`prisma/seed.ts`, `npm run db:seed`): idempotent upserts of the categories and the
-  pre-created accounts (there is no sign-up). Synthetic data only; every account gets
+  pre-created demo accounts (other users sign up through `POST /auth/register`). Synthetic data only; every account gets
   `SEED_USER_PASSWORD` (argon2id-hashed). The Docker image runs it after `prisma:deploy` only
   when `SEED_ON_START=true`, which only the local `docker-compose.yml` sets: any other environment
   built from the image (e.g. staging) is never seeded with the shared password.
