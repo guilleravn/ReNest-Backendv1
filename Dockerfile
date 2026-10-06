@@ -15,4 +15,5 @@ RUN npm run build
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npm run prisma:deploy && npm run start:prod"]
+# The seed is idempotent, so the e2e stack always has the pre-created accounts and categories.
+CMD ["sh", "-c", "npm run prisma:deploy && npm run db:seed && npm run start:prod"]

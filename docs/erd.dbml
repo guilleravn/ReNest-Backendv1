@@ -7,6 +7,8 @@
 // - Prisma does not generate CHECK constraints: every "CHECK (...)" below is added by hand in the
 //   migration SQL (prisma migrate dev --create-only).
 // - onDelete is Restrict unless the ref says otherwise.
+// - Implemented so far (prisma/schema.prisma): users, categories, listings, listing_photos, pickup_options.
+//   reservations, reception_checklists and seller_ratings are added by the slices that need them.
 
 Enum listing_condition {
   LIKE_NEW
@@ -61,10 +63,9 @@ Table listings {
   seller_id     uuid [not null, ref: > users.id]
   category_id   uuid [not null, ref: > categories.id]
   title         varchar(120) [not null]
-  description   text [not null]
+  description   text [note: 'Optional in the create form (UI marks it "Opcional"): NULL when not given']
   condition     listing_condition [not null]
-  price_cents   int [not null, note: 'Integer minor units (database.md). CHECK (price_cents >= 0). int max ≈ 21M currency units: switch to bigint if ARS is in scope']
-  currency      char(3) [not null, note: 'ISO 4217: COP, MXN, ARS... Drop if the MVP is single-country (open question)']
+  price_cents   int [not null, note: 'USD minor units (database.md); the MVP is single-currency, so there is no currency column. CHECK (price_cents >= 100): at least $1']
   status        listing_status [not null, default: 'ACTIVE']
   published_at  timestamptz [not null, default: `now()`]
   created_at    timestamptz [not null, default: `now()`]
@@ -111,8 +112,8 @@ Table listing_photos {
 Table pickup_options {
   id             uuid [pk]
   listing_id     uuid [not null, ref: > listings.id, note: 'onDelete: Cascade (a reserved option is protected by the Restrict FK from reservations)']
-  location_label varchar(120) [not null, note: 'PUBLIC: shown to any buyer choosing an option']
-  address        varchar(255) [not null, note: 'PRIVATE: only visible to the seller and the buyer holding the reservation']
+  location_label varchar(120) [not null, note: 'PUBLIC: shown to any buyer choosing an option. CHECK (btrim(location_label) <> \'\')']
+  address        varchar(255) [not null, note: 'PRIVATE: only visible to the seller and the buyer holding the reservation. CHECK (btrim(address) <> \'\')']
   latitude       decimal(9,6) [note: 'PRIVATE (same as address): coordinates reveal the exact location']
   longitude      decimal(9,6) [note: 'PRIVATE (same as address)']
   weekdays       "weekday[]" [not null, note: 'PUBLIC. Prisma: Weekday[]. CHECK (cardinality(weekdays) >= 1). No duplicates (validated in the DTO)']
