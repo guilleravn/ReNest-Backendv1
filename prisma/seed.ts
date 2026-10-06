@@ -1,4 +1,4 @@
-// Seeds the reference data and the pre-created accounts of the MVP (there is no sign-up).
+// Seeds the reference data and the pre-created demo accounts of the MVP (others sign up).
 // Idempotent: every row is upserted by a natural key, so it can run after each migration.
 // All people below are synthetic (reserved `.test` domain, placeholder phone numbers).
 import 'dotenv/config';
@@ -7,6 +7,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 
 import { PrismaClient } from '../generated/prisma/client.js';
+import { type UserZone } from '../src/users/user-zones.js';
 
 const MIN_SEED_PASSWORD_LENGTH = 8;
 
@@ -16,19 +17,29 @@ const CATEGORIES = [
   { slug: 'home', name: 'Hogar' },
 ] as const;
 
+interface SeedUser {
+  email: string;
+  fullName: string;
+  phoneE164: string | null;
+  city: UserZone;
+  verifiedAt: Date | null;
+}
+
+// `city` must be one of USER_ZONES, like any account created through sign-up. `termsAcceptedAt`
+// stays NULL: these accounts predate the terms checkbox.
 const USERS = [
   {
     email: 'samuel@renest.test',
     fullName: 'Samuel Rojas',
     phoneE164: '+525500000001',
-    city: 'Ciudad de México',
+    city: 'Roma Norte, CDMX',
     verifiedAt: new Date('2026-10-01T00:00:00.000Z'),
   },
   {
     email: 'valentina@renest.test',
     fullName: 'Valentina Cruz',
     phoneE164: '+525500000002',
-    city: 'Ciudad de México',
+    city: 'Condesa, CDMX',
     verifiedAt: null,
   },
   // The buyer persona used by the Gherkin scenarios, the login story and the e2e tests.
@@ -36,7 +47,7 @@ const USERS = [
     email: 'camila@renest.test',
     fullName: 'Camila Torres',
     phoneE164: '+525500000003',
-    city: 'Ciudad de México',
+    city: 'Roma Norte, CDMX',
     verifiedAt: null,
   },
   // No phone on purpose: exercises the WhatsApp "can't be reached" fallback.
@@ -44,10 +55,10 @@ const USERS = [
     email: 'tomas@renest.test',
     fullName: 'Tomás Herrera',
     phoneE164: null,
-    city: 'Guadalajara',
+    city: 'Palermo, Buenos Aires',
     verifiedAt: null,
   },
-] as const;
+] as const satisfies readonly SeedUser[];
 
 function readSeedPassword(): string {
   const password = process.env['SEED_USER_PASSWORD'];
