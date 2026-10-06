@@ -26,14 +26,14 @@ happy path + the 400/401/403/404/409 cases of the contract:
   throttled (per IP + email, per IP and globally, see [security.md](../rules/security.md#auth-design-mvp)):
   `test/auth.e2e-spec.ts` resets the in-memory throttler storage before each test and sends
   `X-Forwarded-For` (trusted from loopback) to act as different clients.
+- **The main business flow**: publish a listing → reserve it with a pickup option → confirm
+  handover → confirm reception.
+- **Anything involving money or payments**, if/when the domain gets it.
 
 **E2E is not in CI** (team decision; the job was dropped for the MVP). Until it is reinstated, run
 `npm run test:e2e` locally and green before merging any change that touches auth or the API. The
 suite needs `JWT_SECRET` in `.env` (the other auth variables have defaults); a reinstated CI job
 must set it too.
-- **The main business flow**: publish a listing → reserve it with a pickup option → confirm
-  handover → confirm reception.
-- **Anything involving money or payments**, if/when the domain gets it.
 
 **Concurrency**: required wherever the domain has a real race condition, i.e. a limited resource
 that two requests can claim at the same time (here, typically two buyers reserving the same
