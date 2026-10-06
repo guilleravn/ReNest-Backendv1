@@ -40,8 +40,9 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 | Module | Owns (Prisma models) | Status |
 |---|---|---|
 | `app` | — (scaffold health/root endpoint) | Exists (Nest scaffold) |
-| `prisma` | — (`PrismaService`, DB connection) | Planned: first DB slice |
-| `auth` | TBD (ERD) | Planned: login story. Design in [security.md](../rules/security.md#auth-design-mvp) |
+| `prisma` | — (`PrismaService`, DB connection) | Exists |
+| `auth` | `User` (model owned by `listings` for now, see below) | `CurrentSellerProvider` only: a temporary hardcoded-seller stand-in (`src/auth/current-seller.ts`) until BO-39 (real login). Design in [security.md](../rules/security.md#auth-design-mvp) |
+| `listings` | `Listing`, `ListingPhoto`, `Category`, `User` | Exists: `GET /listings?status=` (BO-40/BO-27). `Category` and `User` have no dedicated module yet; revisit when a story needs to write them directly |
 | *(domain modules)* | TBD | Added as features are agreed |
 
 Update this table in the same commit that adds a module or a model.
