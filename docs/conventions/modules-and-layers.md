@@ -11,6 +11,8 @@ src/
   main.ts                    # bootstrap only
   app.module.ts
   common/                    # (proposal) cross-cutting: decorators/, filters/, guards/, interceptors/, pipes/
+  config/
+    env.validation.ts        # EnvironmentVariables + validateEnv (ConfigModule fails fast at startup)
   prisma/
     prisma.module.ts
     prisma.service.ts
@@ -24,8 +26,8 @@ src/
     events/                  # only if it emits events
 test/
   <module>.e2e-spec.ts       # e2e against the real app + real Postgres
-prisma/schema.prisma, prisma/migrations/
-generated/prisma/            # generated client (gitignored): NEVER edit
+prisma/schema.prisma, prisma/migrations/, prisma/seed.ts
+generated/prisma/            # generated client (gitignored): NEVER edit. Compiled with src/ (tsconfig.build.json), so the build entry is dist/src/main.js
 ```
 
 Generate with the CLI (`nest g module|controller|service <name> --no-spec`, then adjust) so names
@@ -40,7 +42,7 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 | Module | Owns (Prisma models) | Status |
 |---|---|---|
 | `app` | — (scaffold health/root endpoint) | Exists (Nest scaffold) |
-| `prisma` | — (`PrismaService`, DB connection) | Planned: first DB slice |
+| `prisma` | — (`PrismaService`, DB connection) | Exists |
 | `auth` | TBD (ERD) | Planned: login story. Design in [security.md](../rules/security.md#auth-design-mvp) |
 | *(domain modules)* | TBD | Added as features are agreed |
 
@@ -97,7 +99,10 @@ about `req`/`res`: it receives the current user's id as an argument, not the req
 
 ## Config
 
-Today only `PORT` and `DATABASE_URL`, read via `process.env` in the bootstrap. When adding the
-first new variable: install `@nestjs/config` with `isGlobal: true` and schema validation at startup
-(fail fast), inject `ConfigService`, and update `.env.example`. ❌ `process.env.X` scattered across
-services.
+`@nestjs/config` is global (`ConfigModule.forRoot({ isGlobal: true, validate: validateEnv })`).
+Every variable the app reads is declared, with `class-validator` decorators, in
+`EnvironmentVariables` (`src/config/env.validation.ts`), so a missing or malformed value stops the
+app at startup. Read it with `ConfigService<EnvironmentVariables, true>` and
+`get('X', { infer: true })`. A new variable goes in that class and in `.env.example` in the same
+commit. ❌ `process.env.X` in `src/`. (`prisma/seed.ts` is a standalone script outside Nest and
+reads `process.env` directly.)

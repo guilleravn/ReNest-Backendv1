@@ -14,7 +14,12 @@ or infrastructure. It describes what is installed, not what is planned.
 | ORM | Prisma | 7.10 | `prisma` CLI + `@prisma/client` pinned to the same version |
 | DB driver | `@prisma/adapter-pg` + `pg` | 7.10 / 8.x | Prisma 7 requires a driver adapter at runtime |
 | Database | PostgreSQL | 17 (Docker, local) | `docker-compose.yml` |
-| Auth | Own JWT (`@nestjs/jwt`) + argon2/bcrypt, login only | — | **Not implemented yet.** Design: [security.md](rules/security.md#auth-design-mvp) |
+| Config | `@nestjs/config` | 12.0 | Global; env validated at startup by `src/config/env.validation.ts` |
+| Validation | `class-validator` + `class-transformer` (+ `@nestjs/mapped-types`) | 0.15 / 0.5 / 12.0 | Global `ValidationPipe` registered as `APP_PIPE` in `AppModule` |
+| HTTP hardening | `helmet` | 8.x | In `main.ts`. Throttler and CORS: see [known-deviations.md](known-deviations.md) |
+| Password hashing | `argon2` (argon2id) | 0.45 | Used by the seed today; the login slice reuses it |
+| Auth | Own JWT (`@nestjs/jwt`), login only | — | **Not implemented yet.** Design: [security.md](rules/security.md#auth-design-mvp) |
+| Seed runner | `tsx` | 4.x | Runs `prisma/seed.ts` (`npm run db:seed`) |
 | Job queue | None | — | |
 | Tests | Vitest + Supertest | 4.1 / 7.x | |
 | Lint / format | oxlint (type-aware) / Prettier | 1.x / 3.x | |
@@ -25,6 +30,13 @@ Prisma specifics:
   migrations in `prisma/migrations/`.
 - The client is generated into `generated/prisma/` (gitignored). Import from there, not from
   `@prisma/client`. Run `npm run prisma:generate` after install and after every schema change.
+- `generated/` is compiled together with `src/` (`tsconfig.build.json` has `rootDir: "."`), so the
+  build entry is `dist/src/main.js` (`nest-cli.json` `entryFile`, `npm run start:prod`). CI runs
+  `npm run prisma:generate` before typecheck/tests.
+- **Seed** (`prisma/seed.ts`, `npm run db:seed`): idempotent upserts of the categories and the
+  pre-created accounts (there is no sign-up). Synthetic data only; every account gets
+  `SEED_USER_PASSWORD` (argon2id-hashed). The Docker `api` service runs it on every start, after
+  `prisma:deploy`.
 - Do not install `prisma@latest` blindly: as of 2026-10 the npm `latest` tag points to an 8.0 RC.
   Keep CLI and client on the same stable version.
 
