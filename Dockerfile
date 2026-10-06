@@ -15,5 +15,6 @@ RUN npm run build
 
 EXPOSE 3000
 
-# The seed is idempotent, so the e2e stack always has the pre-created accounts and categories.
-CMD ["sh", "-c", "npm run prisma:deploy && npm run db:seed && npm run start:prod"]
+# The seed is opt-in (SEED_ON_START=true, set only by docker-compose.yml for local/e2e): any other
+# environment built from this image must never create the accounts with the shared seed password.
+CMD ["sh", "-c", "npm run prisma:deploy && if [ \"$SEED_ON_START\" = 'true' ]; then npm run db:seed; fi && npm run start:prod"]

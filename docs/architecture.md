@@ -35,8 +35,9 @@ Prisma specifics:
   `npm run prisma:generate` before typecheck/tests.
 - **Seed** (`prisma/seed.ts`, `npm run db:seed`): idempotent upserts of the categories and the
   pre-created accounts (there is no sign-up). Synthetic data only; every account gets
-  `SEED_USER_PASSWORD` (argon2id-hashed). The Docker `api` service runs it on every start, after
-  `prisma:deploy`.
+  `SEED_USER_PASSWORD` (argon2id-hashed). The Docker image runs it after `prisma:deploy` only
+  when `SEED_ON_START=true`, which only the local `docker-compose.yml` sets: any other environment
+  built from the image (e.g. staging) is never seeded with the shared password.
 - Do not install `prisma@latest` blindly: as of 2026-10 the npm `latest` tag points to an 8.0 RC.
   Keep CLI and client on the same stable version.
 
