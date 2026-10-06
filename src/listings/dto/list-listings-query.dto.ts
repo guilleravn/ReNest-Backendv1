@@ -5,6 +5,7 @@ import { ListingStatus } from '../../../generated/prisma/enums.js';
 export const DEFAULT_PAGE = 1;
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
+export const MAX_PAGE = 1_000_000;
 
 export class ListListingsQueryDto {
   @IsOptional()
@@ -15,6 +16,7 @@ export class ListListingsQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(MAX_PAGE)
   page: number = DEFAULT_PAGE;
 
   @IsOptional()
