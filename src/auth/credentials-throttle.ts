@@ -1,37 +1,109 @@
-import { ExecutionContext } from '@nestjs/common';
+import { ExecutionContext, SetMetadata } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { normalizeIp, type ThrottlerOptions } from '@nestjs/throttler';
 
 import { normalizeEmail } from '../users/user-normalizers.js';
 
-export const CREDENTIALS_THROTTLE_LIMIT = 5;
+// Layered limits for the routes that run argon2 on request data (login, sign-up). All of them apply
+// to every such request, on top of the global per-IP default; none replaces another.
 export const CREDENTIALS_THROTTLE_TTL_MS = 60_000;
+/** Per client IP + email: slows guessing one account's password. */
+export const CREDENTIALS_IP_EMAIL_LIMIT = 5;
+/** Per client IP: stops one client from rotating emails. */
+export const CREDENTIALS_IP_LIMIT = 20;
+/**
+ * All clients together: caps argon2 work (CPU/memory) and account creation even when an attacker
+ * rotates both emails and IPs.
+ */
+export const CREDENTIALS_GLOBAL_LIMIT = 100;
+
+export const CREDENTIALS_IP_EMAIL_THROTTLER = 'credentials-ip-email';
+export const CREDENTIALS_IP_THROTTLER = 'credentials-ip';
+export const CREDENTIALS_GLOBAL_THROTTLER = 'credentials-global';
+
+export const IS_CREDENTIALS_ROUTE_KEY = 'isCredentialsRoute';
+const GLOBAL_TRACKER = 'all';
+const UNKNOWN_IP = 'unknown';
+
+/** Marks a route as a credentials route, so the credential throttlers apply to it. */
+export const CredentialsThrottle = () =>
+  SetMetadata(IS_CREDENTIALS_ROUTE_KEY, true);
+
+interface ThrottledRequest {
+  body?: unknown;
+  ip?: unknown;
+}
+
+// Reflector only reads decorator metadata; it holds no state, so a module-level one is fine here
+// (throttler options are plain config, outside DI).
+const reflector = new Reflector();
+
+function isNotCredentialsRoute(context: ExecutionContext): boolean {
+  return !reflector.getAllAndOverride<boolean | undefined>(
+    IS_CREDENTIALS_ROUTE_KEY,
+    [context.getHandler(), context.getClass()],
+  );
+}
+
+/** The client IP (real one when `TRUST_PROXY` matches the Next.js server); IPv6 per /64. */
+export function trackByIp(req: ThrottledRequest): string {
+  return typeof req.ip === 'string' && req.ip !== ''
+    ? normalizeIp(req.ip)
+    : UNKNOWN_IP;
+}
 
 /**
- * Throttle key for login and sign-up: the normalized email in the body, or the client IP when
- * there is none. The browser never calls the API directly (every request comes from the Next.js
- * server's IP), so a per-IP limit here would lock every user out after a few attempts.
- * Guards run before the ValidationPipe, so the body is still raw and is normalized here.
+ * Client IP + the normalized email in the body (empty when there is none, so requests without an
+ * email are still split per client). Guards run before the ValidationPipe, so the body is raw.
  */
-export function trackByEmailOrIp(
-  req: { body?: unknown; ip?: unknown },
-  _context: ExecutionContext,
-): string {
+export function trackByIpAndEmail(req: ThrottledRequest): string {
   const body = req.body;
   const email = normalizeEmail(
     typeof body === 'object' && body !== null && 'email' in body
       ? body.email
       : undefined,
   );
-  if (typeof email === 'string' && email !== '') {
-    return `email:${email}`;
-  }
-  return `ip:${String(req.ip)}`;
+  return `${trackByIp(req)}|${typeof email === 'string' ? email : ''}`;
 }
 
-/** `@Throttle(CREDENTIALS_THROTTLE)`: replaces the global per-IP default on that route. */
-export const CREDENTIALS_THROTTLE = {
-  default: {
-    limit: CREDENTIALS_THROTTLE_LIMIT,
-    ttl: CREDENTIALS_THROTTLE_TTL_MS,
-    getTracker: trackByEmailOrIp,
-  },
-};
+// The default key includes the route, which would give login and sign-up separate budgets; the
+// credential limits are shared by both routes.
+function credentialsKey(
+  _context: ExecutionContext,
+  tracker: string,
+  throttlerName: string,
+): string {
+  return `${throttlerName}:${tracker}`;
+}
+
+const credentialsThrottler = (
+  name: string,
+  limit: number,
+  getTracker: (req: ThrottledRequest) => string,
+): ThrottlerOptions => ({
+  name,
+  limit,
+  ttl: CREDENTIALS_THROTTLE_TTL_MS,
+  getTracker,
+  generateKey: credentialsKey,
+  // Named throttlers apply to every route unless skipped: these only apply where marked.
+  skipIf: isNotCredentialsRoute,
+});
+
+export const CREDENTIALS_THROTTLERS: ThrottlerOptions[] = [
+  credentialsThrottler(
+    CREDENTIALS_IP_EMAIL_THROTTLER,
+    CREDENTIALS_IP_EMAIL_LIMIT,
+    trackByIpAndEmail,
+  ),
+  credentialsThrottler(
+    CREDENTIALS_IP_THROTTLER,
+    CREDENTIALS_IP_LIMIT,
+    trackByIp,
+  ),
+  credentialsThrottler(
+    CREDENTIALS_GLOBAL_THROTTLER,
+    CREDENTIALS_GLOBAL_LIMIT,
+    () => GLOBAL_TRACKER,
+  ),
+];

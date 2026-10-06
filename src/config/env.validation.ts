@@ -1,5 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsString,
@@ -8,7 +9,10 @@ import {
   Min,
   MinLength,
   validateSync,
+  ValidateBy,
 } from 'class-validator';
+
+import { parseTrustProxy } from './trust-proxy.js';
 
 const MIN_PORT = 1;
 const MAX_PORT = 65535;
@@ -23,8 +27,22 @@ const JWT_EXPIRES_IN_PATTERN = /^\d+(ms|s|m|h|d|w|y)$/;
 const MIN_THROTTLE_VALUE = 1;
 const DEFAULT_THROTTLE_TTL_MS = 60_000;
 const DEFAULT_THROTTLE_LIMIT = 1000;
+const DEFAULT_TRUST_PROXY = 'loopback';
+const MIN_ARGON2_CONCURRENCY = 1;
+const MAX_ARGON2_CONCURRENCY = 64;
+const DEFAULT_ARGON2_CONCURRENCY = 4;
+
+export const NODE_ENVS = ['development', 'test', 'production'] as const;
+export type NodeEnv = (typeof NODE_ENVS)[number];
+
+/** The placeholder shipped in `.env.example`: public, so it must never sign production tokens. */
+export const ENV_EXAMPLE_JWT_SECRET =
+  'local-dev-only-jwt-secret-change-me-0123456789';
 
 export class EnvironmentVariables {
+  @IsIn(NODE_ENVS)
+  NODE_ENV: NodeEnv = 'development';
+
   @IsInt()
   @Min(MIN_PORT)
   @Max(MAX_PORT)
@@ -45,8 +63,8 @@ export class EnvironmentVariables {
   })
   JWT_EXPIRES_IN: string = DEFAULT_JWT_EXPIRES_IN;
 
-  // Global per-IP throttler window and limit. All traffic arrives from the Next.js server's IP, so
-  // this is a coarse safety net for all users combined, not per-user protection.
+  // Global per-client-IP throttler window and limit for every route. A coarse safety net: the
+  // meaningful limits are the credential throttlers on login/sign-up (auth/credentials-throttle.ts).
   @IsInt()
   @Min(MIN_THROTTLE_VALUE)
   THROTTLE_TTL_MS: number = DEFAULT_THROTTLE_TTL_MS;
@@ -54,6 +72,26 @@ export class EnvironmentVariables {
   @IsInt()
   @Min(MIN_THROTTLE_VALUE)
   THROTTLE_LIMIT: number = DEFAULT_THROTTLE_LIMIT;
+
+  // Which proxies may set the client IP through X-Forwarded-For (Express `trust proxy`). Default:
+  // only loopback, i.e. a Next.js server on the same host. See config/trust-proxy.ts.
+  @ValidateBy({
+    name: 'isTrustProxy',
+    validator: {
+      validate: (value: unknown) =>
+        typeof value === 'string' && parseTrustProxy(value) !== null,
+      defaultMessage: () =>
+        'TRUST_PROXY must be a hop count or a comma-separated list of loopback/linklocal/uniquelocal, IPs or CIDRs (never "true")',
+    },
+  })
+  TRUST_PROXY: string = DEFAULT_TRUST_PROXY;
+
+  // Max argon2 hash/verify operations running at once; the rest wait in a queue. Each one uses
+  // ~64 MiB and a CPU core, so this bounds what a burst of logins/sign-ups can consume.
+  @IsInt()
+  @Min(MIN_ARGON2_CONCURRENCY)
+  @Max(MAX_ARGON2_CONCURRENCY)
+  ARGON2_MAX_CONCURRENCY: number = DEFAULT_ARGON2_CONCURRENCY;
 }
 
 /**
@@ -73,6 +111,14 @@ export function validateEnv(
       .map((error) => Object.values(error.constraints ?? {}).join(', '))
       .join('; ');
     throw new Error(`Invalid environment variables: ${details}`);
+  }
+  if (
+    env.NODE_ENV === 'production' &&
+    env.JWT_SECRET === ENV_EXAMPLE_JWT_SECRET
+  ) {
+    throw new Error(
+      'Invalid environment variables: JWT_SECRET must not be the .env.example placeholder in production',
+    );
   }
 
   return env;

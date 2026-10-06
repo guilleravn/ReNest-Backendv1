@@ -1,4 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
@@ -8,6 +9,7 @@ import { UsersService } from '../users/users.service.js';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { InvalidCredentialsException } from './exceptions/invalid-credentials.exception.js';
+import { PasswordHasher } from './password-hasher.service.js';
 
 const JWT_SECRET = 'unit-test-secret-at-least-32-characters-long';
 const USER_ID = '0199b2a4-7c4e-7000-8000-000000000001';
@@ -55,6 +57,9 @@ describe('AuthService', () => {
         AuthService,
         { provide: UsersService, useValue: usersService },
         { provide: JwtService, useValue: jwtService },
+        // Real hasher (argon2 is only wrapped in a spy above), with the default concurrency cap.
+        PasswordHasher,
+        { provide: ConfigService, useValue: { get: () => 4 } },
       ],
     }).compile();
     authService = moduleRef.get(AuthService);

@@ -10,7 +10,7 @@ DTO/validation details live in [api-design.md](api-design.md); Prisma details in
 src/
   main.ts                    # bootstrap only
   app.module.ts
-  common/                    # cross-cutting, used by every module: decorators/ (@Public, @CurrentUser); filters/, guards/, interceptors/, pipes/ when needed
+  common/                    # cross-cutting, used by every module: decorators/ (@Public, @CurrentUser), concurrency/ (Semaphore); filters/, guards/, interceptors/, pipes/ when needed
   config/
     env.validation.ts        # EnvironmentVariables + validateEnv (ConfigModule fails fast at startup)
   prisma/
@@ -43,7 +43,7 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 |---|---|---|
 | `app` | — (scaffold health/root endpoint) | Exists (Nest scaffold) |
 | `prisma` | — (`PrismaService`, DB connection) | Exists |
-| `users` | `User` | Exists (A9). `UsersService` is the only code that touches `prisma.user`; `AuthModule` uses it |
+| `users` | `User` | Exists (A9). `UsersService` is the only code that touches `prisma.user`; `AuthModule` uses it. Also owns the zones list (`USER_ZONES`, a user's city) and serves it with `ZonesController` (`GET /zones`, no service: it returns a constant) |
 | `auth` | — (login, sign-up, JWT issuing/verification, global `JwtAuthGuard`) | Exists (A9). Design in [security.md](../rules/security.md#auth-design-mvp) |
 | `categories` | `Category` | Planned: A1 (`GET /categories`) |
 | `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Planned: A1 (`POST /listings`) |

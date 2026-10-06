@@ -1,6 +1,12 @@
 import 'reflect-metadata';
 
-import { EnvironmentVariables, validateEnv } from './env.validation.js';
+import { readFileSync } from 'node:fs';
+
+import {
+  ENV_EXAMPLE_JWT_SECRET,
+  EnvironmentVariables,
+  validateEnv,
+} from './env.validation.js';
 
 const DATABASE_URL = 'postgresql://user:pass@localhost:5432/db?schema=public';
 const JWT_SECRET = 'unit-test-secret-at-least-32-characters-long';
@@ -18,6 +24,9 @@ describe('validateEnv', () => {
       JWT_EXPIRES_IN: '7d',
       THROTTLE_TTL_MS: 60000,
       THROTTLE_LIMIT: 1000,
+      NODE_ENV: 'development',
+      TRUST_PROXY: 'loopback',
+      ARGON2_MAX_CONCURRENCY: 4,
     });
   });
 
@@ -37,6 +46,9 @@ describe('validateEnv', () => {
       JWT_EXPIRES_IN: '7d',
       THROTTLE_TTL_MS: 60000,
       THROTTLE_LIMIT: 1000,
+      NODE_ENV: 'development',
+      TRUST_PROXY: 'loopback',
+      ARGON2_MAX_CONCURRENCY: 4,
       UNRELATED: 'x',
     });
   });
@@ -133,4 +145,87 @@ describe('validateEnv', () => {
       );
     },
   );
+
+  it('defaults NODE_ENV to development, TRUST_PROXY to loopback and ARGON2_MAX_CONCURRENCY to 4', () => {
+    expect(validateEnv(REQUIRED)).toMatchObject({
+      NODE_ENV: 'development',
+      TRUST_PROXY: 'loopback',
+      ARGON2_MAX_CONCURRENCY: 4,
+    });
+  });
+
+  it('throws when NODE_ENV is not development, test or production', () => {
+    expect(() => validateEnv({ ...REQUIRED, NODE_ENV: 'staging' })).toThrow(
+      /NODE_ENV must be one of the following values/,
+    );
+  });
+
+  it.each([
+    '1',
+    'loopback',
+    'loopback, 10.0.0.0/8',
+    '192.168.1.20',
+    '::1',
+    'fd00::/8',
+  ])('accepts TRUST_PROXY %j', (TRUST_PROXY) => {
+    expect(validateEnv({ ...REQUIRED, TRUST_PROXY }).TRUST_PROXY).toBe(
+      TRUST_PROXY,
+    );
+  });
+
+  it.each([
+    'true',
+    '*',
+    'false',
+    '',
+    'anywhere',
+    '10.0.0.0/33',
+    '10.0.0.1/8/1',
+    'loopback,',
+  ])('throws when TRUST_PROXY is %j', (TRUST_PROXY) => {
+    expect(() => validateEnv({ ...REQUIRED, TRUST_PROXY })).toThrow(
+      /TRUST_PROXY must be a hop count or a comma-separated list/,
+    );
+  });
+
+  it.each(['0', '65', '2.5', 'abc'])(
+    'throws when ARGON2_MAX_CONCURRENCY is %j',
+    (ARGON2_MAX_CONCURRENCY) => {
+      expect(() =>
+        validateEnv({ ...REQUIRED, ARGON2_MAX_CONCURRENCY }),
+      ).toThrow(/ARGON2_MAX_CONCURRENCY/);
+    },
+  );
+
+  it('throws when JWT_SECRET is the .env.example placeholder in production', () => {
+    expect(() =>
+      validateEnv({
+        DATABASE_URL,
+        JWT_SECRET: ENV_EXAMPLE_JWT_SECRET,
+        NODE_ENV: 'production',
+      }),
+    ).toThrow(
+      /JWT_SECRET must not be the .env.example placeholder in production/,
+    );
+  });
+
+  it.each(['development', 'test'])(
+    'accepts the .env.example JWT_SECRET placeholder when NODE_ENV is %s',
+    (NODE_ENV) => {
+      expect(
+        validateEnv({
+          DATABASE_URL,
+          JWT_SECRET: ENV_EXAMPLE_JWT_SECRET,
+          NODE_ENV,
+        }).JWT_SECRET,
+      ).toBe(ENV_EXAMPLE_JWT_SECRET);
+    },
+  );
+
+  it('keeps ENV_EXAMPLE_JWT_SECRET in sync with .env.example', () => {
+    const envExample = readFileSync('.env.example', 'utf8');
+
+    expect(envExample).toContain(`JWT_SECRET=${ENV_EXAMPLE_JWT_SECRET}
+`);
+  });
 });

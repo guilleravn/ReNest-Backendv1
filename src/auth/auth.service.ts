@@ -1,6 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
 
 import { UsersService } from '../users/users.service.js';
 import { AccessTokenResponseDto } from './dto/access-token-response.dto.js';
@@ -8,6 +7,7 @@ import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { UserProfileResponseDto } from './dto/user-profile-response.dto.js';
 import { InvalidCredentialsException } from './exceptions/invalid-credentials.exception.js';
+import { PasswordHasher } from './password-hasher.service.js';
 
 export interface AccessTokenPayload {
   sub: string;
@@ -29,16 +29,17 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly passwordHasher: PasswordHasher,
   ) {}
 
   async login({ email, password }: LoginDto): Promise<AccessTokenResponseDto> {
     const credentials = await this.usersService.findCredentialsByEmail(email);
     if (!credentials) {
-      await argon2.verify(DUMMY_PASSWORD_HASH, password);
+      await this.passwordHasher.verify(DUMMY_PASSWORD_HASH, password);
       throw new InvalidCredentialsException();
     }
 
-    const isPasswordValid = await argon2.verify(
+    const isPasswordValid = await this.passwordHasher.verify(
       credentials.passwordHash,
       password,
     );
@@ -50,9 +51,7 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto): Promise<AccessTokenResponseDto> {
-    const passwordHash = await argon2.hash(dto.password, {
-      type: argon2.argon2id,
-    });
+    const passwordHash = await this.passwordHasher.hash(dto.password);
     const { id } = await this.usersService.create({
       email: dto.email,
       passwordHash,
@@ -65,16 +64,6 @@ export class AuthService {
     return this.issueToken(id);
   }
 
-  async issueToken(userId: string): Promise<AccessTokenResponseDto> {
-    const accessToken = await this.jwtService.signAsync({ sub: userId });
-    const { exp } = this.jwtService.decode<AccessTokenPayload>(accessToken);
-
-    return {
-      accessToken,
-      expiresAt: new Date(exp * MS_PER_SECOND).toISOString(),
-    };
-  }
-
   async me(userId: string): Promise<UserProfileResponseDto> {
     const profile = await this.usersService.findProfileById(userId);
     if (!profile) {
@@ -82,5 +71,15 @@ export class AuthService {
       throw new UnauthorizedException();
     }
     return profile;
+  }
+
+  private async issueToken(userId: string): Promise<AccessTokenResponseDto> {
+    const accessToken = await this.jwtService.signAsync({ sub: userId });
+    const { exp } = this.jwtService.decode<AccessTokenPayload>(accessToken);
+
+    return {
+      accessToken,
+      expiresAt: new Date(exp * MS_PER_SECOND).toISOString(),
+    };
   }
 }

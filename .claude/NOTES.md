@@ -13,6 +13,46 @@ Format:
 
 ---
 
+## 2026-10-06 · A9 / BO-39 (code review round) · backend-qa-reviewer
+
+- Every per-IP credential limit assumes ReNest-Frontend's server sends `X-Forwarded-For` with the
+  browser's IP, and that it **sets or appends** that IP rather than relaying a client-supplied
+  header unchecked (Express takes the right-most untrusted address, so appending is safe). Without
+  the header, all users share the Next server's IP: 20 logins/sign-ups per minute for the whole
+  app.
+- `test/throttling.e2e-spec.ts` boots its own app with `THROTTLE_LIMIT=8` and a `TRUST_PROXY` that
+  excludes loopback, to prove the `default` throttler still runs on login and that an untrusted
+  `X-Forwarded-For` is ignored. It sets those env vars before importing `AppModule` and restores
+  them afterwards.
+- `docs/conventions/testing.md`: the new "E2E is not in CI" paragraph sits inside the E2E bullet
+  list, so the "main business flow" and "money" bullets now read as part of it. Move the paragraph
+  after the list next time the file is touched.
+
+## 2026-10-06 · A9 / BO-39 (code review round) · backend-issue-implementer
+
+- Supersedes the earlier A9 notes on throttling ("per-email limit replaces the global one") and on
+  the seed's `termsAcceptedAt` (the column is gone: new migration
+  `20261006195909_drop_terms_accepted_at_from_users`).
+- That migration was written by hand from `prisma migrate diff` (same SQL Prisma generates) and
+  applied with `prisma:deploy`: `prisma migrate dev` refuses to run non-interactively when a
+  migration drops a column. `prisma migrate status` and a datasource-vs-schema diff report no
+  drift.
+- E2E is not in CI (team decision). Until the job is reinstated, `npm run test:e2e` must pass
+  locally before merging; it needs `JWT_SECRET` in `.env` (`NODE_ENV`, `TRUST_PROXY`,
+  `ARGON2_MAX_CONCURRENCY` and the `THROTTLE_*` vars have defaults). Also in `testing.md`.
+- Credential throttlers are opt-in through `skipIf` + `@CredentialsThrottle()` metadata (named
+  throttlers otherwise apply to every route); their keys ignore the route, so login and sign-up
+  share one budget. The `default` throttler still runs on those routes.
+- `test/auth.e2e-spec.ts` resets the in-memory throttler storage in `beforeEach` by calling
+  `ThrottlerStorageService.onApplicationShutdown()` (the only public way to clear both of its maps).
+  If the storage changes (e.g. Redis), replace that reset.
+- `docker-compose.yml` sets `TRUST_PROXY: 'loopback, uniquelocal'` for the `api` service: inside
+  Docker the Next.js server's requests come from the bridge network, not loopback.
+- `NODE_ENV` is now validated (`development|test|production`, default `development`); any other
+  value (e.g. `staging`) stops the app at startup.
+- The global credential limit (100 / 60 s, all clients) is a DoS lever by design: an attacker can
+  block every login/sign-up for up to a minute. Accepted for the MVP; documented in security.md.
+
 ## 2026-10-06 · A9 (auth) · backend-qa-reviewer
 
 - `JWT_SECRET` is now required at startup: a local `.env` created before A9 makes `start:dev`,

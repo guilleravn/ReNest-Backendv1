@@ -1,33 +1,41 @@
-import { Module, ValidationPipe } from '@nestjs/common';
+import { Module, OnModuleInit, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD, APP_PIPE } from '@nestjs/core';
+import { APP_GUARD, APP_PIPE, HttpAdapterHost } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import type { Express } from 'express';
 
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
+import { CREDENTIALS_THROTTLERS } from './auth/credentials-throttle.js';
 import { JwtAuthGuard } from './auth/jwt-auth.guard.js';
 import { EnvironmentVariables, validateEnv } from './config/env.validation.js';
+import { parseTrustProxy } from './config/trust-proxy.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { UsersModule } from './users/users.module.js';
+
+export const DEFAULT_THROTTLER = 'default';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
-    // Global default per client IP (THROTTLE_LIMIT / THROTTLE_TTL_MS): a coarse safety net, since
-    // every request comes from the Next.js server's IP. Login and sign-up replace it with a
-    // per-email limit (see auth/credentials-throttle.ts).
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
         throttlers: [
+          // Every route, per client IP (THROTTLE_LIMIT / THROTTLE_TTL_MS): a coarse safety net.
           {
+            name: DEFAULT_THROTTLER,
             limit: config.get('THROTTLE_LIMIT', { infer: true }),
             ttl: config.get('THROTTLE_TTL_MS', { infer: true }),
           },
+          // Only routes marked @CredentialsThrottle() (login, sign-up); they stack on the default.
+          ...CREDENTIALS_THROTTLERS,
         ],
       }),
     }),
     PrismaModule,
+    UsersModule,
     AuthModule,
   ],
   controllers: [AppController],
@@ -48,4 +56,24 @@ import { PrismaModule } from './prisma/prisma.module.js';
     { provide: APP_GUARD, useExisting: JwtAuthGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  constructor(
+    private readonly httpAdapterHost: HttpAdapterHost,
+    private readonly config: ConfigService<EnvironmentVariables, true>,
+  ) {}
+
+  /**
+   * Sets Express' `trust proxy` from TRUST_PROXY so `req.ip` is the browser's IP forwarded by the
+   * Next.js server in X-Forwarded-For (the throttlers key on it). Done here rather than in main.ts
+   * so apps created from AppModule in e2e tests get it too.
+   */
+  onModuleInit(): void {
+    const trustProxy = parseTrustProxy(
+      this.config.get('TRUST_PROXY', { infer: true }),
+    );
+    this.httpAdapterHost.httpAdapter
+      .getInstance<Express>()
+      // Never null here: validated at startup (env.validation.ts).
+      .set('trust proxy', trustProxy ?? false);
+  }
+}

@@ -1,10 +1,12 @@
-// Auth endpoints against the real app and Postgres. Every test uses its own email, so the
-// per-email login/sign-up throttle (5 req / 60 s) never trips across tests.
+// Auth endpoints against the real app and Postgres. Throttler counters are reset before every test
+// (they are in memory), so each test starts with fresh credential budgets; the throttling tests
+// set X-Forwarded-For (trusted from loopback, TRUST_PROXY's default) to act as different clients.
 import { randomUUID } from 'node:crypto';
 
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
+import { getStorageToken, ThrottlerStorageService } from '@nestjs/throttler';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 
@@ -31,7 +33,6 @@ describe('Auth (e2e)', () => {
     city: 'Condesa, CDMX',
     phoneE164: '+52 55 1234 5678',
     password: PASSWORD,
-    acceptedTerms: true,
   });
 
   const register = (email: string) =>
@@ -46,6 +47,11 @@ describe('Auth (e2e)', () => {
     app = moduleRef.createNestApplication();
     await app.init();
     prisma = app.get(PrismaService);
+  });
+
+  beforeEach(() => {
+    // Clears every throttler counter (the in-memory storage has no other public reset).
+    app.get<ThrottlerStorageService>(getStorageToken()).onApplicationShutdown();
   });
 
   afterAll(async () => {
@@ -79,7 +85,7 @@ describe('Auth (e2e)', () => {
       });
     });
 
-    it('stores an argon2id hash, the terms acceptance time and no verification', async () => {
+    it('stores an argon2id hash and no verification', async () => {
       const email = uniqueEmail();
 
       await register(email).expect(201);
@@ -88,13 +94,11 @@ describe('Auth (e2e)', () => {
         where: { email },
         select: {
           passwordHash: true,
-          termsAcceptedAt: true,
           isVerified: true,
           verifiedAt: true,
         },
       });
       expect(user.passwordHash).toMatch(/^\$argon2id\$/);
-      expect(user.termsAcceptedAt).toBeInstanceOf(Date);
       expect(user).toMatchObject({ isVerified: false, verifiedAt: null });
     });
 
@@ -149,11 +153,15 @@ describe('Auth (e2e)', () => {
       });
     });
 
-    it('returns 400 when the terms are not accepted', async () => {
-      await request(app.getHttpServer())
+    it('returns 400 when the body still sends acceptedTerms (field removed)', async () => {
+      const response = await request(app.getHttpServer())
         .post('/auth/register')
-        .send({ ...registerBody(uniqueEmail()), acceptedTerms: false })
+        .send({ ...registerBody(uniqueEmail()), acceptedTerms: true })
         .expect(400);
+
+      expect(response.body.message).toEqual([
+        'property acceptedTerms should not exist',
+      ]);
     });
 
     it('returns 400 when the body has an unknown field', async () => {
@@ -167,7 +175,6 @@ describe('Auth (e2e)', () => {
       ['id', randomUUID()],
       ['passwordHash', '$argon2id$v=19$m=65536,t=3,p=4$c2FsdA$aGFzaA'],
       ['verifiedAt', '2026-10-01T00:00:00.000Z'],
-      ['termsAcceptedAt', '2020-01-01T00:00:00.000Z'],
     ])(
       'returns 400 and creates no account when the body sets %s',
       async (field, value) => {
@@ -236,7 +243,6 @@ describe('Auth (e2e)', () => {
       ['phoneE164', '+52 55 abcd 5678'],
       ['password', 'short'],
       ['password', 'x'.repeat(129)],
-      ['acceptedTerms', 'true'],
       ['city', 'condesa, cdmx'],
     ])('returns 400 when %s is %j', async (field, value) => {
       const response = await request(app.getHttpServer())
@@ -379,9 +385,6 @@ describe('Auth (e2e)', () => {
         .expect(429);
     });
 
-    // Requests without a usable email share one per-IP throttle bucket: this table's email cases
-    // plus the "missing or not an object" test below make exactly 5, the limit. Add more such
-    // requests to this route and they start getting 429.
     it.each([
       ['email', 12345],
       ['email', ['a@b.test']],
@@ -566,6 +569,111 @@ describe('Auth (e2e)', () => {
   describe('Public routes', () => {
     it('serves GET / without a token', async () => {
       await request(app.getHttpServer()).get('/').expect(200);
+    });
+
+    it('serves GET /zones without a token, in the USER_ZONES order', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/zones')
+        .expect(200);
+
+      expect(response.body).toEqual([
+        'Roma Norte, CDMX',
+        'Condesa, CDMX',
+        'Palermo, Buenos Aires',
+        'Providencia, Santiago',
+        'Chapinero, Bogotá',
+        'Miraflores, Lima',
+        'Pinheiros, São Paulo',
+      ]);
+    });
+  });
+
+  // Layered limits on login and sign-up (src/auth/credentials-throttle.ts): per client IP + email
+  // (5 / 60 s), per client IP (20 / 60 s) and across all clients (100 / 60 s).
+  describe('Credential throttling', () => {
+    const fromIp = (ip: string) => ({ 'X-Forwarded-For': ip });
+
+    const loginFrom = (
+      ip: string,
+      email: string,
+      password = 'wrong-password',
+    ) =>
+      request(app.getHttpServer())
+        .post('/auth/login')
+        .set(fromIp(ip))
+        .send({ email, password });
+
+    it('uses the forwarded client IP, so another IP is not locked out of the same email', async () => {
+      const email = uniqueEmail();
+      for (let i = 0; i < 5; i += 1) {
+        await loginFrom('203.0.113.1', email).expect(401);
+      }
+
+      await loginFrom('203.0.113.1', email).expect(429);
+      await loginFrom('203.0.113.2', email).expect(401);
+    });
+
+    it('returns 429 after 20 attempts from one IP even when every email is different', async () => {
+      // Empty passwords fail validation (400) after the throttlers have counted the request,
+      // which keeps argon2 out of the way.
+      for (let i = 0; i < 20; i += 1) {
+        await loginFrom('203.0.113.3', uniqueEmail(), '').expect(400);
+      }
+
+      await loginFrom('203.0.113.3', uniqueEmail(), '').expect(429);
+      await loginFrom('203.0.113.4', uniqueEmail(), '').expect(400);
+    });
+
+    it('shares the per-IP budget between login and sign-up', async () => {
+      for (let i = 0; i < 20; i += 1) {
+        await loginFrom('203.0.113.5', uniqueEmail(), '').expect(400);
+      }
+
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .set(fromIp('203.0.113.5'))
+        .send(registerBody(uniqueEmail()))
+        .expect(429);
+    });
+
+    it('returns 429 after 100 attempts across all clients when IPs and emails rotate', async () => {
+      // 10 IPs x 10 emails: below the per-IP (20) and per-IP+email (5) limits.
+      for (let ip = 0; ip < 10; ip += 1) {
+        for (let i = 0; i < 10; i += 1) {
+          await loginFrom(`198.51.100.${ip}`, uniqueEmail(), '').expect(400);
+        }
+      }
+
+      await loginFrom('198.51.100.200', uniqueEmail(), '').expect(429);
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .set(fromIp('198.51.100.201'))
+        .send(registerBody(uniqueEmail()))
+        .expect(429);
+    });
+
+    it('keeps requests without an email in a separate bucket per client IP', async () => {
+      const noEmail = (ip: string) =>
+        request(app.getHttpServer())
+          .post('/auth/login')
+          .set(fromIp(ip))
+          .send({ password: PASSWORD });
+
+      for (let i = 0; i < 5; i += 1) {
+        await noEmail('203.0.113.6').expect(400);
+      }
+
+      await noEmail('203.0.113.6').expect(429);
+      await noEmail('203.0.113.7').expect(400);
+    });
+
+    it('does not apply the credential limits to other routes', async () => {
+      for (let i = 0; i < 25; i += 1) {
+        await request(app.getHttpServer())
+          .get('/zones')
+          .set(fromIp('203.0.113.8'))
+          .expect(200);
+      }
     });
   });
 });

@@ -6,7 +6,6 @@ import {
   HttpStatus,
   Post,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 
 import {
   CurrentUser,
@@ -14,7 +13,7 @@ import {
 } from '../common/decorators/current-user.decorator.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { AuthService } from './auth.service.js';
-import { CREDENTIALS_THROTTLE } from './credentials-throttle.js';
+import { CredentialsThrottle } from './credentials-throttle.js';
 import { AccessTokenResponseDto } from './dto/access-token-response.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -25,7 +24,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @Throttle(CREDENTIALS_THROTTLE)
+  @CredentialsThrottle()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto): Promise<AccessTokenResponseDto> {
@@ -33,7 +32,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle(CREDENTIALS_THROTTLE)
+  @CredentialsThrottle()
   @Post('register')
   register(@Body() dto: RegisterDto): Promise<AccessTokenResponseDto> {
     return this.authService.register(dto);

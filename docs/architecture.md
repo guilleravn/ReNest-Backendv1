@@ -17,8 +17,8 @@ or infrastructure. It describes what is installed, not what is planned.
 | Config | `@nestjs/config` | 12.0 | Global; env validated at startup by `src/config/env.validation.ts` |
 | Validation | `class-validator` + `class-transformer` (+ `@nestjs/mapped-types`) | 0.15 / 0.5 / 12.0 | Global `ValidationPipe` registered as `APP_PIPE` in `AppModule` |
 | HTTP hardening | `helmet` | 8.x | In `main.ts`. CORS: see [known-deviations.md](known-deviations.md) |
-| Rate limiting | `@nestjs/throttler` | 6.7 | Global `ThrottlerGuard` (`APP_GUARD`): `THROTTLE_LIMIT` req / `THROTTLE_TTL_MS` per IP (default 1000 / 60 s; coarse safety net, all traffic comes from the Next.js server); login and sign-up fixed 5 req / 60 s per email. See [security.md](rules/security.md#auth-design-mvp) |
-| Password hashing | `argon2` (argon2id) | 0.45 | Sign-up, login and the seed |
+| Rate limiting | `@nestjs/throttler` | 6.7 | Global `ThrottlerGuard` (`APP_GUARD`) with named throttlers: `default` per client IP on every route (`THROTTLE_LIMIT` / `THROTTLE_TTL_MS`, default 1000 / 60 s); login and sign-up add per IP+email 5, per IP 20 and global 100 per 60 s. Client IP from `X-Forwarded-For` via Express `trust proxy` (`TRUST_PROXY`). See [security.md](rules/security.md#auth-design-mvp) |
+| Password hashing | `argon2` (argon2id) | 0.45 | Sign-up and login through `PasswordHasher` (max `ARGON2_MAX_CONCURRENCY` at once); the seed uses it directly |
 | Auth | Own JWT (`@nestjs/jwt`): login + sign-up | 12.0 | Global `JwtAuthGuard` (`APP_GUARD`), `@Public()`, `@CurrentUser()`. Design: [security.md](rules/security.md#auth-design-mvp) |
 | Seed runner | `tsx` | 4.x | Runs `prisma/seed.ts` (`npm run db:seed`) |
 | Job queue | None | — | |

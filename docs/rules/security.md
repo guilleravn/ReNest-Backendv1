@@ -9,18 +9,21 @@ touches auth, endpoints, user input, secrets, logging of user data or uploads.
 it needs a new decision.
 
 - **Login + sign-up.** Sign-up was moved into the MVP by product-owner decision on 2026-10-06
-  (it was planned for R2). Still out of scope: password reset, social login, phone/identity
+  (it was planned for R2; recorded in Linear BO-39). Still out of scope: password reset, social login, phone/identity
   verification, email verification, refresh tokens and token revocation. There is no
   fake/switchable "current user".
 - **Contract** (all public except `/auth/me`; errors use the standard Nest body):
   - `POST /auth/login` `{ email, password }` → `200 { accessToken, expiresAt }`; `401`
     `"Invalid email or password"` for both an unknown email and a wrong password; `400`; `429`.
-  - `POST /auth/register` `{ fullName, email, city, phoneE164?, password, acceptedTerms }` →
+  - `POST /auth/register` `{ fullName, email, city, phoneE164?, password }` →
     `201 { accessToken, expiresAt }` (sign-up also signs the user in); `409` `"An account with this
-    email already exists"`; `400`; `429`. `city` is one of `USER_ZONES`
-    (`src/users/user-zones.ts`); `phoneE164` may be omitted, `null` or `""` (stored as NULL),
-    otherwise separators are stripped and it must be E.164; `acceptedTerms` must be `true`
-    (stored as `termsAcceptedAt`). New accounts start unverified.
+    email already exists"`; `400`; `429`. `city` is one of `USER_ZONES` (served by `GET /zones`);
+    `phoneE164` may be omitted, `null` or `""` (stored as NULL), otherwise separators are stripped
+    and it must be E.164. New accounts start unverified. There is no terms checkbox: it was removed
+    (BO-39 review) until real Terms/Privacy content exists, so `acceptedTerms` is now an unknown
+    field (`400`).
+  - `GET /zones` (public) → `200` the `USER_ZONES` array of strings, in order. The backend is the
+    single source of truth for the sign-up city list.
   - `GET /auth/me` → `200 { id, email, fullName, city, phoneE164, isVerified }`; `401` when the
     token is missing, invalid, expired or its user no longer exists.
   - `accessToken` is a JWT signed with `@nestjs/jwt` (HS256, `JWT_SECRET`) carrying only the user id
@@ -36,18 +39,39 @@ it needs a new decision.
 - **Account enumeration**: login never reveals whether an email exists (same message, and an
   unknown email still runs `argon2.verify` against a dummy hash so the timing matches). Sign-up's
   `409` does reveal it; accepted, because the sign-up form has to tell people the email is taken.
-  Both endpoints are throttled per email, which limits harvesting through either.
-- **Throttling**: a global `ThrottlerGuard` (`APP_GUARD`, registered before the JWT guard, so
-  unauthenticated requests count too) allows `THROTTLE_LIMIT` requests per `THROTTLE_TTL_MS`
-  per client IP (defaults 1000 / 60 000 ms, configurable via env). The browser never calls the
-  API directly, so every request arrives from the Next.js server's IP: this limit applies to all
-  users combined and is only a **coarse safety net** against runaway traffic, not per-user
-  protection; size it for total app traffic. The meaningful protection is the credentials
-  throttle: login and sign-up replace the global limit with a fixed 5 req / 60 s **per normalized
-  email** (falling back to the IP when the body has no email), via
-  `@Throttle(CREDENTIALS_THROTTLE)` and its `getTracker` (`src/auth/credentials-throttle.ts`). A
-  per-IP login limit would lock out every user at once. Counters are in memory (one API
-  instance).
+  Both endpoints share the credential throttlers below, which limits harvesting through either.
+- **Client IP**: the browser never calls the API directly; the Next.js server forwards the
+  browser's IP in `X-Forwarded-For`. Express `trust proxy` is set from `TRUST_PROXY` (in
+  `AppModule.onModuleInit`, so e2e apps get it too) so that `req.ip` is that forwarded IP, but only
+  when the request comes from a trusted proxy. Default `loopback` (Next.js on the same host);
+  when the frontend runs elsewhere, set the Next server's IP/CIDR (`10.0.3.7`, `10.0.0.0/16`) or a
+  hop count (`1`, when exactly one proxy sits in front). `true`/`*` is rejected at startup: it
+  would let any client pick its own IP. `docker-compose.yml` sets `loopback, uniquelocal` because
+  requests reach the container from the Docker bridge. Every per-IP limit below depends on this
+  setting **and** on the frontend forwarding `X-Forwarded-For`; without them all users share the
+  Next server's IP.
+- **Throttling** (`@nestjs/throttler`, named throttlers, global `ThrottlerGuard` registered
+  before the JWT guard so unauthenticated requests count too; counters in memory, one API
+  instance):
+  - `default`, every route: `THROTTLE_LIMIT` requests per `THROTTLE_TTL_MS` per client IP
+    (defaults 1000 / 60 s). A coarse safety net.
+  - Login and sign-up (`@CredentialsThrottle()`) additionally get three layered limits, **all
+    applied together** and shared by both routes (`src/auth/credentials-throttle.ts`):
+    1. per client IP + normalized email, 5 / 60 s: slows guessing one account's password;
+    2. per client IP, 20 / 60 s: stops one client from rotating emails;
+    3. across all clients (one fixed key), 100 / 60 s: caps argon2 work and account creation
+       even when an attacker rotates both emails and IPs. It can also block legitimate logins
+       for up to a minute during such an attack; accepted for the MVP's traffic.
+  - The credential throttlers use `skipIf` so they never apply to other routes, and the
+    `default` throttler is never overridden on credential routes.
+  - **Remaining lockout trade-off**: keying by IP + email means an attacker elsewhere cannot lock
+    a victim out, but one sharing the victim's IP (same NAT, office or mobile carrier) can, for
+    up to 60 s.
+- **argon2 concurrency**: every hash/verify (including the dummy verify) goes through
+  `PasswordHasher`, which runs at most `ARGON2_MAX_CONCURRENCY` (default 4) at once and queues the
+  rest, so a burst cannot exhaust memory (~64 MiB each) or CPU.
+- **Placeholder secret**: with `NODE_ENV=production` the app refuses to start if `JWT_SECRET` is
+  the `.env.example` placeholder.
 - **Swappable boundary**: only `AuthModule` knows how users authenticate. The rest of the code
   depends on the global guard, `@Public()` and `@CurrentUser()` (in `src/common/decorators/`), so
   moving to an external provider only replaces `AuthModule`.
@@ -69,6 +93,8 @@ These rules apply from the auth slice (A9) onwards. Entry format: see
   [Auth design](#auth-design-mvp).
 - **Protects**: nobody can forge a valid token.
 - **Fails as**: a committed or hardcoded secret → anyone can mint tokens for any user.
+- **Tested by**: `src/config/env.validation.spec.ts` (missing/short secret, placeholder rejected
+  in production).
 
 ### Protected routes require a valid token
 - **Requires**: auth guard on every non-public route; public routes are explicitly marked.
@@ -99,6 +125,11 @@ These rules apply from the auth slice (A9) onwards. Entry format: see
 
 - **Global auth**: JWT guard registered as `APP_GUARD`; public routes marked with `@Public()`
   (`IS_PUBLIC_KEY`). Nothing is public by default.
+- **The current user may no longer exist**: the global guard only verifies the token (signature,
+  expiry, `sub` is a UUID); it does not check that the user still exists. Any endpoint that reads
+  or writes on behalf of `@CurrentUser()` must handle a missing user: a not-found lookup or a
+  foreign key violation (P2003) on a write maps to `401` (or `404` for the target resource),
+  never a `500`. `GET /auth/me` returns `401`.
 - **Ownership (BOLA/IDOR)**: the service filters by owner in the query itself
   (`where: { id: listingId, sellerId: userId }`) or compares and throws 404/403. Hiding a button in the
   frontend protects nothing.
@@ -106,7 +137,8 @@ These rules apply from the auth slice (A9) onwards. Entry format: see
   service.
 - **Mass assignment**: `whitelist` + `forbidNonWhitelisted`; separate DTOs per role if the editable
   fields differ.
-- **Passwords**: argon2id (`argon2`), 8–128 characters at sign-up; never in responses or logs.
+- **Passwords**: argon2id via `PasswordHasher` (concurrency-capped), 8–128 characters at sign-up;
+  never in responses or logs.
   Login returns the same message for "user does not exist" and "wrong password".
 - **Secrets** (API keys, connection strings, JWT secrets) never go in the repo or in a prompt: only
   in `.env` (gitignored); `.env.example` holds placeholders only.
