@@ -3,12 +3,13 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ListingsService } from './listings.service.js';
 
 const SELLER_ID = '018f6e5c-0000-7000-8000-000000000001';
+const FIRST_PAGE = { page: 1, pageSize: 20 };
 
 function buildListingRow(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: '018f6e5c-0000-7000-8000-000000000101',
     title: 'Wooden dining table',
-    priceCents: 2500000,
+    priceCents: 25000,
     status: 'ACTIVE',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     photos: [{ storageKey: 'listings/101/photo-0.jpg' }],
@@ -44,17 +45,22 @@ describe('ListingsService', () => {
   });
 
   describe('findAllForSeller', () => {
-    it('returns only the current seller listings matching the given status', async () => {
+    it('returns only the seller listings with the given status when a status is given', async () => {
       const row = buildListingRow({ status: 'ACTIVE' });
       prisma.listing.findMany.mockResolvedValue([row]);
       prisma.listing.count.mockResolvedValue(1);
 
-      const result = await service.findAllForSeller(SELLER_ID, 'ACTIVE');
+      const result = await service.findAllForSeller(SELLER_ID, {
+        status: 'ACTIVE',
+        ...FIRST_PAGE,
+      });
 
       expect(prisma.listing.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { sellerId: SELLER_ID, status: 'ACTIVE' },
+          skip: 0,
           take: 20,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         }),
       );
       expect(prisma.listing.count).toHaveBeenCalledWith({
@@ -71,18 +77,18 @@ describe('ListingsService', () => {
             createdAt: '2026-01-01T00:00:00.000Z',
           },
         ],
-        meta: { total: 1 },
+        meta: { page: 1, pageSize: 20, total: 1 },
       });
     });
 
-    it('returns all of the current seller listings when no status is given', async () => {
+    it('returns all of the seller listings when no status is given', async () => {
       prisma.listing.findMany.mockResolvedValue([
         buildListingRow({ status: 'ACTIVE' }),
         buildListingRow({ id: 'id-2', status: 'PENDING' }),
       ]);
       prisma.listing.count.mockResolvedValue(2);
 
-      const result = await service.findAllForSeller(SELLER_ID, undefined);
+      const result = await service.findAllForSeller(SELLER_ID, FIRST_PAGE);
 
       expect(prisma.listing.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { sellerId: SELLER_ID } }),
@@ -95,18 +101,58 @@ describe('ListingsService', () => {
       prisma.listing.findMany.mockResolvedValue([]);
       prisma.listing.count.mockResolvedValue(0);
 
-      const result = await service.findAllForSeller(SELLER_ID, 'COMPLETED');
+      const result = await service.findAllForSeller(SELLER_ID, {
+        status: 'COMPLETED',
+        ...FIRST_PAGE,
+      });
 
-      expect(result).toEqual({ data: [], meta: { total: 0 } });
+      expect(result).toEqual({
+        data: [],
+        meta: { page: 1, pageSize: 20, total: 0 },
+      });
     });
 
-    it('falls back to a null photoUrl when the listing has no cover photo', async () => {
+    it('skips the previous pages when a later page is requested', async () => {
+      prisma.listing.findMany.mockResolvedValue([]);
+      prisma.listing.count.mockResolvedValue(7);
+
+      const result = await service.findAllForSeller(SELLER_ID, {
+        page: 3,
+        pageSize: 5,
+      });
+
+      expect(prisma.listing.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 10, take: 5 }),
+      );
+      expect(result.meta).toEqual({ page: 3, pageSize: 5, total: 7 });
+    });
+
+    it('takes the photo with the lowest position as the cover when positions have gaps', async () => {
+      prisma.listing.findMany.mockResolvedValue([buildListingRow()]);
+      prisma.listing.count.mockResolvedValue(1);
+
+      await service.findAllForSeller(SELLER_ID, FIRST_PAGE);
+
+      expect(prisma.listing.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            photos: {
+              select: { storageKey: true },
+              orderBy: { position: 'asc' },
+              take: 1,
+            },
+          }),
+        }),
+      );
+    });
+
+    it('returns a null photoUrl when the listing has no photo', async () => {
       prisma.listing.findMany.mockResolvedValue([
         buildListingRow({ photos: [] }),
       ]);
       prisma.listing.count.mockResolvedValue(1);
 
-      const result = await service.findAllForSeller(SELLER_ID, 'ACTIVE');
+      const result = await service.findAllForSeller(SELLER_ID, FIRST_PAGE);
 
       expect(result.data[0]?.photoUrl).toBeNull();
     });

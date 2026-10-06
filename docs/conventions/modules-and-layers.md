@@ -44,9 +44,9 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 | `app` | — (scaffold health/root endpoint) | Exists (Nest scaffold) |
 | `prisma` | — (`PrismaService`, DB connection) | Exists |
 | `users` | `User` | Planned: login story (`AuthModule` reads users through `UsersService`) |
-| `auth` | `User` (model owned by `listings` for now, see below) | `CurrentSellerProvider` only: a temporary hardcoded-seller stand-in (`src/auth/current-seller.ts`) until BO-39 (real login) replaces it with JWT issuing/verification. Design in [security.md](../rules/security.md#auth-design-mvp) |
+| `auth` | — (JWT issuing/verification only) | Only a `@CurrentUser()` stub (`src/auth/current-user.decorator.ts`) that returns the seeded seller until the login story (BO-39) adds the guard and JWT. Design in [security.md](../rules/security.md#auth-design-mvp) |
 | `categories` | `Category` | Planned: A1 (`GET /categories`) |
-| `listings` | `Listing`, `ListingPhoto`, `PickupOption`, `Category`, `User` | Exists: `GET /listings?status=` (BO-40/BO-27). `POST /listings` (A1) still planned. `Category` and `User` have no dedicated module yet; revisit when a story needs to write them directly |
+| `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Exists: `GET /listings?status=&page=&pageSize=` (the current seller's listings, BO-27). `POST /listings` (A1) still planned |
 | *(domain modules)* | TBD | Added as features are agreed |
 
 Update this table in the same commit that adds a module or a model. `prisma/seed.ts` and test

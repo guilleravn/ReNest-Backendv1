@@ -6,7 +6,7 @@ import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 
 import { AppModule } from '../src/app.module.js';
-import { SEEDED_SELLER_ID } from '../src/auth/current-seller.js';
+import { SEEDED_SELLER_ID } from '../src/auth/current-user.decorator.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 const SEED_SLUGS = ['electronics', 'furniture', 'home'];

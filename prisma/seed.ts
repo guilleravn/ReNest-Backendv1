@@ -8,7 +8,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 
 import { PrismaClient } from '../generated/prisma/client.js';
-import { SEEDED_SELLER_ID } from '../src/auth/current-seller.js';
+import { SEEDED_SELLER_ID } from '../src/auth/current-user.decorator.js';
 
 const MIN_SEED_PASSWORD_LENGTH = 8;
 
@@ -22,7 +22,7 @@ const CATEGORIES = [
 ] as const;
 
 const USERS = [
-  // The seller the `CurrentSellerProvider` stub acts as (see src/auth/current-seller.ts).
+  // The seller the `@CurrentUser()` stub acts as (see src/auth/current-user.decorator.ts).
   {
     id: SEEDED_SELLER_ID,
     email: 'samuel@renest.test',
