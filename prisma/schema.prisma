@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -10,4 +5,87 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum ListingCondition {
+  LIKE_NEW
+  GENTLY_USED
+  HEAVILY_USED
+
+  @@map("listing_condition")
+}
+
+enum ListingStatus {
+  ACTIVE
+  PENDING
+  COMPLETED
+
+  @@map("listing_status")
+}
+
+model User {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  fullName     String    @map("full_name") @db.VarChar(120)
+  phoneE164    String?   @map("phone_e164") @db.VarChar(20)
+  city         String    @db.VarChar(100)
+  isVerified   Boolean   @default(false) @map("is_verified")
+  verifiedAt   DateTime? @map("verified_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  listings Listing[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique @db.VarChar(60)
+  slug      String   @unique @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  listings Listing[]
+
+  @@map("categories")
+}
+
+model Listing {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  sellerId    String           @map("seller_id") @db.Uuid
+  categoryId  String           @map("category_id") @db.Uuid
+  title       String           @db.VarChar(120)
+  description String           @db.Text
+  condition   ListingCondition
+  priceCents  Int              @map("price_cents")
+  currency    String           @db.Char(3)
+  status      ListingStatus    @default(ACTIVE)
+  publishedAt DateTime         @default(now()) @map("published_at") @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  seller   User           @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  category Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  photos   ListingPhoto[]
+
+  @@index([status, publishedAt])
+  @@index([status, categoryId])
+  @@index([sellerId, status])
+  @@map("listings")
+}
+
+model ListingPhoto {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  listingId  String   @map("listing_id") @db.Uuid
+  storageKey String   @map("storage_key") @db.VarChar(500)
+  position   Int      @db.SmallInt
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, position])
+  @@map("listing_photos")
 }
