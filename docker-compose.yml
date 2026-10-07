@@ -28,6 +28,13 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
       # Local/e2e stack only: seed the pre-created accounts and categories on start (idempotent).
       SEED_ON_START: 'true'
+      # Requests reach the container from the Docker bridge (a private range), not loopback, so the
+      # forwarded client IP is only honored if private ranges are trusted. Local stack only.
+      TRUST_PROXY: 'loopback, uniquelocal'
+      # The frontend's Playwright suite runs against this stack and every request comes from one
+      # client IP, so the default per-IP (20) login/sign-up limit would answer most of it
+      # with 429. Local/e2e stack only; per IP + email stays at 5 so its 429 test still runs.
+      CREDENTIALS_IP_LIMIT: '1000'
     ports:
       - '3000:3000'
     depends_on:

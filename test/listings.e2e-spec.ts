@@ -1,19 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
-import { SEEDED_SELLER_ID } from '../src/auth/current-user.decorator.js';
+import { SEEDED_SELLER_ID } from '../prisma/seed-fixtures.js';
 
-// Until BO-39 (login), every request acts as SEEDED_SELLER_ID (see
-// src/auth/current-user.decorator.ts), so this suite cannot use a seller of its own: it owns that
-// seller's listings for its duration. Replace with a per-suite user once tests can log in.
+// Requests are authenticated as SEEDED_SELLER_ID (Samuel, the seeded seller) with a JWT signed by
+// the app's own JwtService. The suite owns that seller's listings for its duration because
+// prisma/seed.ts gives the same fixed id demo listings; a per-suite seller would remove that
+// coupling.
 
 describe('GET /listings (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let authHeader: string;
 
   const runId = randomUUID();
   const categoryId = randomUUID();
@@ -61,6 +64,7 @@ describe('GET /listings (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
     prisma = moduleFixture.get(PrismaService);
+    authHeader = `Bearer ${await app.get(JwtService).signAsync({ sub: SEEDED_SELLER_ID })}`;
 
     // Same id and email as prisma/seed.ts, so whichever runs first, the other reuses the row.
     await prisma.user.upsert({
@@ -71,7 +75,7 @@ describe('GET /listings (e2e)', () => {
         email: 'samuel@renest.test',
         passwordHash: 'not-a-real-hash',
         fullName: 'Samuel Rojas',
-        city: 'Ciudad de México',
+        city: 'Roma Norte, CDMX',
       },
     });
     // The current seller is fixed, so start from a known state: drop the listings the seed (or
@@ -84,7 +88,7 @@ describe('GET /listings (e2e)', () => {
         email: `listings-other-seller-${runId}@renest.test`,
         passwordHash: 'not-a-real-hash',
         fullName: 'Other Seller',
-        city: 'Guadalajara',
+        city: 'Palermo, Buenos Aires',
       },
     });
     await prisma.category.create({
@@ -105,10 +109,15 @@ describe('GET /listings (e2e)', () => {
     await app.close();
   });
 
+  it('returns 401 without a token', async () => {
+    await request(app.getHttpServer()).get('/listings').expect(401);
+  });
+
   describe('when the current seller has no listings', () => {
     it('returns 200 with an empty data array when no listing matches the status', async () => {
       const response = await request(app.getHttpServer())
         .get('/listings?status=COMPLETED')
+        .set('Authorization', authHeader)
         .expect(200);
 
       expect(response.body).toEqual({
@@ -188,6 +197,7 @@ describe('GET /listings (e2e)', () => {
     it('returns only the current seller ACTIVE listings, newest first, when status is ACTIVE', async () => {
       const response = await request(app.getHttpServer())
         .get('/listings?status=ACTIVE')
+        .set('Authorization', authHeader)
         .expect(200);
 
       expect(response.body).toEqual({
@@ -216,6 +226,7 @@ describe('GET /listings (e2e)', () => {
     it('returns only the current seller PENDING listings when status is PENDING', async () => {
       const response = await request(app.getHttpServer())
         .get('/listings?status=PENDING')
+        .set('Authorization', authHeader)
         .expect(200);
 
       expect(response.body).toEqual({
@@ -236,6 +247,7 @@ describe('GET /listings (e2e)', () => {
     it('returns only the current seller COMPLETED listings when status is COMPLETED', async () => {
       const response = await request(app.getHttpServer())
         .get('/listings?status=COMPLETED')
+        .set('Authorization', authHeader)
         .expect(200);
 
       expect(response.body).toEqual({
@@ -256,6 +268,7 @@ describe('GET /listings (e2e)', () => {
     it('returns every current seller listing, newest first and without other sellers, when no status is given', async () => {
       const response = await request(app.getHttpServer())
         .get('/listings')
+        .set('Authorization', authHeader)
         .expect(200);
 
       const ids = (response.body.data as Array<{ id: string }>).map(
@@ -274,6 +287,7 @@ describe('GET /listings (e2e)', () => {
     it('returns the requested page and the full total when page and pageSize are given', async () => {
       const response = await request(app.getHttpServer())
         .get('/listings?status=ACTIVE&page=2&pageSize=1')
+        .set('Authorization', authHeader)
         .expect(200);
 
       expect(response.body).toEqual({
@@ -300,7 +314,10 @@ describe('GET /listings (e2e)', () => {
       ['pageSize is above the maximum', 'pageSize=101'],
       ['an unknown param is sent', 'sellerId=someone-else'],
     ])('returns 400 when %s', async (_condition, query) => {
-      await request(app.getHttpServer()).get(`/listings?${query}`).expect(400);
+      await request(app.getHttpServer())
+        .get(`/listings?${query}`)
+        .set('Authorization', authHeader)
+        .expect(400);
     });
   });
 });

@@ -33,6 +33,7 @@ real ownership (`/listings/:listingId/photos`); if the child has its own identit
 | 409 | `ConflictException` | Clashes with current state: duplicate, invalid transition, resource taken |
 | 422 | `UnprocessableEntityException` | Do not use unless the contract requires it (use 400/409) |
 | 429 | (throttler) | Rate limit |
+| 503 | `ServiceUnavailableException` | Temporarily overloaded, client may retry (`ServerBusyException`: argon2 queue full on login/sign-up) |
 | 500 | — | A bug. Never thrown on purpose |
 
 **Error body**: Nest's standard shape, identical on every endpoint:

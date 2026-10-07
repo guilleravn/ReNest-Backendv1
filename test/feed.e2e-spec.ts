@@ -1,21 +1,24 @@
 import { randomUUID } from 'node:crypto';
 
 import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 
+import { SEEDED_SELLER_ID } from '../prisma/seed-fixtures.js';
 import { AppModule } from '../src/app.module.js';
-import { SEEDED_SELLER_ID } from '../src/auth/current-user.decorator.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 // The feed is global (every ACTIVE listing in the database, the seed's included), so every search
 // below includes a token unique to this run (every fixture title ends with it): it scopes the
-// results to this suite's own fixtures.
+// results to this suite's own fixtures. Requests are authenticated as SEEDED_SELLER_ID with a JWT
+// signed by the app's own JwtService (the feed is behind the global auth guard).
 
 describe('GET /feed (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let authHeader: string;
 
   const runId = randomUUID();
   const token = `feede2e${runId.slice(0, 8)}`;
@@ -61,7 +64,9 @@ describe('GET /feed (e2e)', () => {
   };
 
   const search = (query: string) =>
-    request(app.getHttpServer()).get(`/feed?${query}`);
+    request(app.getHttpServer())
+      .get(`/feed?${query}`)
+      .set('Authorization', authHeader);
   const q = (text: string): string => `q=${encodeURIComponent(text)}`;
   const ids = (body: { data: Array<{ id: string }> }): string[] =>
     body.data.map((listing) => listing.id);
@@ -88,6 +93,7 @@ describe('GET /feed (e2e)', () => {
     app = moduleFixture.createNestApplication();
     await app.init();
     prisma = moduleFixture.get(PrismaService);
+    authHeader = `Bearer ${await app.get(JwtService).signAsync({ sub: SEEDED_SELLER_ID })}`;
 
     await prisma.user.create({
       data: {
@@ -372,6 +378,10 @@ describe('GET /feed (e2e)', () => {
 
   it('returns 200 when q is exactly 120 characters', async () => {
     await search(`q=${'a'.repeat(120)}`).expect(200);
+  });
+
+  it('returns 401 when no token is sent', async () => {
+    await request(app.getHttpServer()).get('/feed').expect(401);
   });
 
   describe('invalid query', () => {

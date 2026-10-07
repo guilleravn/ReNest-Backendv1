@@ -1,6 +1,8 @@
 // Fixed ids of the rows `prisma/seed.ts` creates, shared with the tests that check them.
 // Kept apart from seed.ts because importing that script runs the seed.
-export { SEEDED_SELLER_ID } from '../src/auth/current-user.decorator.js';
+
+// Samuel Rojas, the seeded seller whose listings the BO-40 fixtures and e2e tests use.
+export const SEEDED_SELLER_ID = '018f6e5c-0000-7000-8000-000000000001';
 
 // A second seller, used to prove listings are scoped by ownership.
 export const OTHER_SELLER_ID = '018f6e5c-0000-7000-8000-000000000002';

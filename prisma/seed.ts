@@ -1,4 +1,4 @@
-// Seeds the reference data and the pre-created accounts of the MVP (there is no sign-up),
+// Seeds the reference data and the pre-created demo accounts of the MVP (others sign up),
 // plus the BO-40 listings fixtures ("My Listings per tab" + ownership scoping) and the ACTIVE
 // listings of the public feed (B1, BO-5).
 // Idempotent: every row is upserted by a natural key, so it can run after each migration.
@@ -13,6 +13,7 @@ import type {
   ListingCondition,
   ListingStatus,
 } from '../generated/prisma/enums.js';
+import { type UserZone } from '../src/users/user-zones.js';
 import {
   OTHER_SELLER_ID,
   SEED_FEED_LISTING_IDS,
@@ -30,14 +31,24 @@ const CATEGORIES = [
   { slug: 'home', name: 'Hogar' },
 ] as const;
 
+interface SeedUser {
+  id?: string;
+  email: string;
+  fullName: string;
+  phoneE164: string | null;
+  city: UserZone;
+  verifiedAt: Date | null;
+}
+
+// `city` must be one of USER_ZONES, like any account created through sign-up.
 const USERS = [
-  // The seller the `@CurrentUser()` stub acts as until BO-39 (see src/auth/current-user.decorator.ts).
+  // The seller whose listings the BO-40 fixtures and e2e tests use (fixed id, see seed-fixtures.ts).
   {
     id: SEEDED_SELLER_ID,
     email: 'samuel@renest.test',
     fullName: 'Samuel Rojas',
     phoneE164: '+525500000001',
-    city: 'Ciudad de México',
+    city: 'Roma Norte, CDMX',
     verifiedAt: new Date('2026-10-01T00:00:00.000Z'),
   },
   // A second seller, used to prove listings are scoped by ownership.
@@ -46,7 +57,7 @@ const USERS = [
     email: 'valentina@renest.test',
     fullName: 'Valentina Cruz',
     phoneE164: '+525500000002',
-    city: 'Ciudad de México',
+    city: 'Condesa, CDMX',
     verifiedAt: null,
   },
   // The buyer persona used by the Gherkin scenarios, the login story and the e2e tests.
@@ -54,7 +65,7 @@ const USERS = [
     email: 'camila@renest.test',
     fullName: 'Camila Torres',
     phoneE164: '+525500000003',
-    city: 'Ciudad de México',
+    city: 'Roma Norte, CDMX',
     verifiedAt: null,
   },
   // No phone on purpose: exercises the WhatsApp "can't be reached" fallback.
@@ -62,10 +73,10 @@ const USERS = [
     email: 'tomas@renest.test',
     fullName: 'Tomás Herrera',
     phoneE164: null,
-    city: 'Guadalajara',
+    city: 'Palermo, Buenos Aires',
     verifiedAt: null,
   },
-] as const;
+] as const satisfies readonly SeedUser[];
 
 // Users whose id is fixed because code or tests point at it.
 const FIXED_USER_IDS: ReadonlyMap<string, string> = new Map(
@@ -118,7 +129,7 @@ function readSeedPassword(): string {
 }
 
 // An account created by an older seed keeps its random id, so the listings below (and the
-// `@CurrentUser()` stub) would point at a user that does not exist. Fail with the fix instead.
+// e2e fixtures) would point at a user that does not exist. Fail with the fix instead.
 async function assertFixedUserIds(prisma: PrismaClient): Promise<void> {
   const existing = await prisma.user.findMany({
     where: { email: { in: [...FIXED_USER_IDS.keys()] } },
