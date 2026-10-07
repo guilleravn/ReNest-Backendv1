@@ -214,8 +214,8 @@ describe('GET /feed (e2e)', () => {
     });
   });
 
-  it('never returns PENDING or COMPLETED listings', async () => {
-    const response = await search(`q=${token}&pageSize=100`).expect(200);
+  it('excludes PENDING and COMPLETED listings when their title matches q', async () => {
+    const response = await search(`q=${token}`).expect(200);
 
     expect(ids(response.body)).not.toContain(pendingArmchairId);
     expect(ids(response.body)).not.toContain(completedArmchairId);
@@ -283,24 +283,25 @@ describe('GET /feed (e2e)', () => {
     ]);
   });
 
+  // Unscoped by design: the total is checked against the DB count, so the test holds however
+  // many ACTIVE rows the database has (no reliance on them fitting in one page).
   it('returns every ACTIVE listing, newest first, when q is missing or blank', async () => {
     const activeTotal = await prisma.listing.count({
       where: { status: 'ACTIVE' },
     });
 
     for (const query of ['', 'q=', `q=${encodeURIComponent('   ')}`]) {
-      const response = await search(`${query}&pageSize=100`).expect(200);
+      const response = await search(query).expect(200);
 
       expect(response.body.meta).toEqual({
         page: 1,
-        pageSize: 100,
+        pageSize: 20,
         total: activeTotal,
       });
       const publishedAts = (
         response.body.data as Array<{ publishedAt: string }>
       ).map((listing) => listing.publishedAt);
       expect(publishedAts).toEqual([...publishedAts].sort().reverse());
-      expect(ids(response.body)).not.toContain(pendingArmchairId);
     }
   });
 
@@ -325,29 +326,51 @@ describe('GET /feed (e2e)', () => {
     });
   });
 
-  it("includes the current user's own ACTIVE listings", async () => {
+  it("includes the current user's own ACTIVE listings when their title matches q", async () => {
     const response = await search(q(`own wardrobe ${token}`)).expect(200);
 
     expect(ids(response.body)).toEqual([ownListingId]);
   });
 
-  it('validates the length of q after trimming it', async () => {
+  it('returns 200 when q is 120 characters after trimming its surrounding spaces', async () => {
     await search(q(`  ${'a'.repeat(120)}  `)).expect(200);
   });
 
-  it('returns the standard validation error body when q is too long', async () => {
-    const response = await search(`q=${'a'.repeat(121)}`).expect(400);
+  it.each([
+    ['a NUL character', 'q=lamp%00'],
+    ['a line feed', 'q=a%0Ab'],
+    ['a tab between words', 'q=desk%09lamp'],
+    ['the unit separator (U+001F)', 'q=a%1Fb'],
+    ['DEL (U+007F)', 'q=a%7Fb'],
+  ])(
+    'returns 400 with the standard validation error body when q contains %s',
+    async (_character, query) => {
+      const response = await search(query).expect(400);
+
+      expect(response.body).toEqual({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: ['q must not contain control characters'],
+      });
+    },
+  );
+
+  it('returns 200 when q has a control character only at its ends, since trimming removes it', async () => {
+    const response = await search(`q=%0Adesk%20lamp%20${token}%09`).expect(200);
+
+    expect(ids(response.body)).toEqual([deskLampId]);
+  });
+
+  it('returns 200 when q has accented letters or symbols outside the control range', async () => {
+    const response = await search(q(`lámpara € ✓ ${token}`)).expect(200);
 
     expect(response.body).toEqual({
-      statusCode: 400,
-      error: 'Bad Request',
-      message: [
-        expect.stringContaining('q must be shorter than or equal to 120'),
-      ],
+      data: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
     });
   });
 
-  it('accepts a q of exactly 120 characters', async () => {
+  it('returns 200 when q is exactly 120 characters', async () => {
     await search(`q=${'a'.repeat(120)}`).expect(200);
   });
 

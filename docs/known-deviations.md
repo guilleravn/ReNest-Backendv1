@@ -12,6 +12,12 @@ and remove the entry here in the same commit.
 - `GET /listings` and `GET /feed` (`src/listings/listings.service.ts`): `photoUrl` carries the
   cover photo's raw `storageKey`, not a URL, because there is no storage yet. The storage slice
   (A1, S3/R2) resolves it to a real URL under the same field name.
+- `GET /feed` (`src/listings/feed.controller.ts`): a singular, non-resource route, against the
+  plural-noun rule in [api-design.md](conventions/api-design.md#routes) and
+  [naming.md](conventions/naming.md). On purpose: it is a buyer-facing view over the ACTIVE
+  `listings` (every seller's, title search), not a resource of its own, and `GET /listings` is
+  already the current seller's "My Listings". The contract is agreed with the frontend and with
+  BO-6 (which adds the `category` filter on top), so renaming it needs a plan.
 - `prisma/seed.ts`: the `PENDING` and `COMPLETED` listings have no reservation (and so no buyer or
   `seller_handed_over_at`), because the `reservations` table does not exist yet. The reservations
   slice must seed a consistent reservation for each.

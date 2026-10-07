@@ -13,6 +13,22 @@ Format:
 
 ---
 
+## 2026-10-07 · BO-42 (PR #9 review fixes) · backend-issue-implementer
+- Agreed with BO-6 (Adriel, PR #10): BO-5 merges first and its `GET /feed` contract is the base
+  (`?q=` as the search param, `category { slug, name }`, `publishedAt desc, id desc` order). BO-6
+  rebases on top, adding the `category` (slug) filter and `GET /categories`. No category filter
+  here.
+- `q` with a control character (`\u0000`-`\u001F`, `\u007F`) is now a `400` from `@Matches` on
+  `ListFeedQueryDto`: a NUL used to reach Postgres and come back as a raw Prisma `500`.
+- Pagination moved to `src/common/pagination/` (`PaginationQueryDto`, `PageParams`,
+  `Paginated<T>`, `toSkipTake`); `common/` is no longer a proposal in modules-and-layers.md.
+  Both list methods share `COVER_PHOTO_SELECT` + `coverPhotoUrl`. The `/listings` and `/feed`
+  JSON is unchanged (only the key order inside each item may differ, which JSON does not define).
+- `/feed`'s singular route is recorded in `docs/known-deviations.md` (deliberate).
+- The blank-`q` feed e2e no longer asks for `pageSize=100`: it checks `meta.total` against the DB's
+  ACTIVE count and the order of the first page, so it holds with any number of ACTIVE rows.
+- Follow-ups outside this PR: accent-insensitive search (`unaccent`) and the feed pagination UI.
+
 ## 2026-10-06 · BO-42 (B1 · GET /feed) · backend-issue-implementer
 - Verified with an e2e test: Prisma passes `contains` + `mode: 'insensitive'` to `ILIKE` **without
   escaping** `%`/`_`. `ListingsService.findFeed` escapes `\`, `%` and `_` with a backslash
