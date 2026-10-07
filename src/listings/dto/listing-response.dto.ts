@@ -1,4 +1,5 @@
 import type { ListingStatus } from '../../../generated/prisma/enums.js';
+import type { Paginated } from '../../common/pagination/pagination.js';
 
 export interface ListingResponseDto {
   id: string;
@@ -10,11 +11,4 @@ export interface ListingResponseDto {
   createdAt: string;
 }
 
-export interface ListListingsResponseDto {
-  data: ListingResponseDto[];
-  meta: {
-    page: number;
-    pageSize: number;
-    total: number;
-  };
-}
+export type ListListingsResponseDto = Paginated<ListingResponseDto>;

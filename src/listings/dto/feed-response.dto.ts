@@ -1,3 +1,5 @@
+import type { Paginated } from '../../common/pagination/pagination.js';
+
 export interface FeedListingResponseDto {
   id: string;
   title: string;
@@ -11,11 +13,4 @@ export interface FeedListingResponseDto {
   publishedAt: string;
 }
 
-export interface ListFeedResponseDto {
-  data: FeedListingResponseDto[];
-  meta: {
-    page: number;
-    pageSize: number;
-    total: number;
-  };
-}
+export type ListFeedResponseDto = Paginated<FeedListingResponseDto>;

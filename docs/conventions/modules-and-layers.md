@@ -10,7 +10,10 @@ DTO/validation details live in [api-design.md](api-design.md); Prisma details in
 src/
   main.ts                    # bootstrap only
   app.module.ts
-  common/                    # (proposal) cross-cutting: decorators/, filters/, guards/, interceptors/, pipes/
+  common/                    # cross-cutting code with no domain and no Prisma models (add decorators/, filters/, guards/, interceptors/, pipes/ when needed)
+    pagination/
+      pagination-query.dto.ts  # PaginationQueryDto (page, pageSize) + DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_PAGE; list query DTOs extend it
+      pagination.ts            # PageParams, Paginated<T> ({ data, meta: { page, pageSize, total } }), toSkipTake() → Prisma skip/take
   config/
     env.validation.ts        # EnvironmentVariables + validateEnv (ConfigModule fails fast at startup)
   prisma/

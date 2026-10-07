@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { escapeLikePattern, ListingsService } from './listings.service.js';
+import {
+  coverPhotoUrl,
+  escapeLikePattern,
+  ListingsService,
+} from './listings.service.js';
 
 const SELLER_ID = '018f6e5c-0000-7000-8000-000000000001';
 const FIRST_PAGE = { page: 1, pageSize: 20 };
@@ -299,5 +303,20 @@ describe('escapeLikePattern', () => {
 
   it('returns the text unchanged when it has no special characters', () => {
     expect(escapeLikePattern('Leather armchair')).toBe('Leather armchair');
+  });
+});
+
+describe('coverPhotoUrl', () => {
+  it('returns the storage key of the first photo when the listing has photos', () => {
+    expect(
+      coverPhotoUrl([
+        { storageKey: 'listings/1/photo-0.jpg' },
+        { storageKey: 'listings/1/photo-1.jpg' },
+      ]),
+    ).toBe('listings/1/photo-0.jpg');
+  });
+
+  it('returns null when the listing has no photo', () => {
+    expect(coverPhotoUrl([])).toBeNull();
   });
 });

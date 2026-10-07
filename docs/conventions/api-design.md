@@ -68,6 +68,8 @@ Installed (`class-validator` + `class-transformer`) with the first endpoint.
 
 **Pagination (proposal)**: offset with `page` (1-based, default 1) and `pageSize` (default 20, max
 `MAX_PAGE_SIZE = 100`). Sorting with `sortBy` + `sortOrder=asc|desc`, against a whitelist of fields.
+Query DTOs extend `PaginationQueryDto` and services return `Paginated<T>` using `toSkipTake()`
+(`src/common/pagination/`).
 
 ```json
 { "data": [ { "id": "…" } ], "meta": { "page": 1, "pageSize": 20, "total": 57 } }
