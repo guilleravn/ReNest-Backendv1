@@ -13,6 +13,63 @@ Format:
 
 ---
 
+## 2026-10-06 · BO-44 (QA re-review) · backend-qa-reviewer
+- `GET /feed` rejects a whitespace-only `search` with 400: an addition to the BO-44 contract
+  ("1–100 chars"). Harmless for ReNest-Frontend's feed, which trims the term and omits blank
+  ones (`src/features/feed/components/feed-search.tsx`, `feed-filters.ts`); any other client
+  must do the same. Leading/trailing spaces inside a non-blank term are not trimmed by the API.
+- Wildcard escaping is also covered positively (titles with literal `%`, `_`, `\` still match)
+  in `test/feed.e2e-spec.ts`, which also guards against double-escaping if Prisma ever starts
+  escaping `contains` itself.
+
+## 2026-10-06 · BO-44 (QA fix) · backend-issue-implementer
+- Fixed the QA-flagged LIKE-wildcard bug: `FeedService.findAll` now escapes `\`, `%` and `_` in
+  `search` (`value.replace(/[\\%_]/g, '\\$&')`) before passing it to Prisma's `contains`, since
+  Postgres's default `ILIKE` escape character is `\` and an unescaped `%`/`_` is otherwise
+  interpreted as a wildcard instead of matched literally. Verified behaviorally against real
+  Postgres via `test/feed.e2e-spec.ts`'s "treats LIKE wildcards in the search literally" case
+  (was the 1 failing test QA reported; now passes). Added a matching unit test in
+  `feed.service.spec.ts` asserting the exact escaped string reaches `contains`.
+- `ListFeedQueryDto.search` now also requires `@Matches(/\S/)` (at least one non-whitespace
+  char), on top of the existing `@MinLength(1)`/`@MaxLength(100)`: a whitespace-only value (e.g.
+  a single space) used to pass validation and match every title containing a space. Chose
+  rejection (400) over silently trimming, to stay consistent with how the rest of this DTO
+  treats malformed input (category's slug pattern also rejects rather than normalizes).
+- Added a one-line comment to `CategoriesService.findAll` explaining the missing `take` limit is
+  intentional (small, seed-controlled set), per QA's non-blocking note, so it doesn't get
+  re-flagged.
+- Re-ran the full validation suite: `npm run lint`, `npm run typecheck`, `npm run format:check`,
+  `npm test` (30 passed), `npm run test:e2e` (52 passed, via `npm run db:up`/`db:down`) — all
+  green.
+
+## 2026-10-06 · BO-44 · backend-issue-implementer
+- `FeedService` queries `prisma.listing` directly instead of going through `ListingsService`: the
+  module-ownership rule in `docs/conventions/modules-and-layers.md` says a module only queries its
+  own Prisma models, but `ListingsService.findAllForSeller` is hardcoded to the current seller
+  (`sellerId` in the `where`) and has a different filter set, so it cannot serve the public,
+  unscoped buyer feed without changing its signature — out of this work package's owned files
+  (`src/listings/**`). Documented as a deviation in `docs/known-deviations.md` and in the new
+  `feed` row of the module table; worth revisiting if `listings` ever grows a reusable "public
+  listings" query both modules can share.
+- `category` filtering is format-only (`^[a-z0-9-]+$`) and goes through the `Listing -> Category`
+  relation (`category: { slug: category }`), per the contract: an unknown/malformed-but-matching
+  slug (e.g. `not-a-real-category`) returns `{ data: [], meta: { total: 0, ... } }`, not a 400.
+  Covered by a unit test and an e2e test.
+- `search` uses `@MinLength(1) @MaxLength(100)` (the contract's own range) and
+  `{ contains: search, mode: 'insensitive' }` against `title` only, matching the existing "title
+  ILIKE, not full-text" decision already in `business-invariants.md`.
+- Pagination constants/validation (`page`/`pageSize`, defaults 1/20, max 100) are duplicated from
+  `ListListingsQueryDto` into `ListFeedQueryDto` rather than shared, since `src/listings/**` is out
+  of scope for this change and there's no existing shared DTO base to extend without touching it.
+- Added the "the buyer feed only shows ACTIVE listings" invariant to
+  `docs/rules/business-invariants.md`, enforced by hardcoding `status: 'ACTIVE'` in
+  `FeedService.findAll` (not accepted as a query param), with a dedicated unit test asserting it
+  holds regardless of which other filters are passed.
+- `GET /categories` and `GET /feed` are reachable without a token, same as `GET /listings`: there
+  is no global auth guard yet (BO-39 not landed), so no `@Public()` marker was needed or added.
+- Ran `npm run lint`, `npm run typecheck`, `npm run format:check`, `npm test` (27 passed) and
+  `npm run test:e2e` (42 passed, via `npm run db:up`) — all green.
+
 ## 2026-10-06 · BO-40 (PR #7 review fixes) · backend-qa-reviewer
 - The current-seller stub is now the `@CurrentUser()` param decorator in
   `src/auth/current-user.decorator.ts` (the boundary security.md defines); `CurrentSellerProvider`
