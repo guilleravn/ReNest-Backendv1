@@ -168,7 +168,7 @@ describe('Seed (e2e)', () => {
     ]);
   });
 
-  it('creates the ACTIVE feed listings for Valentina and Tomás across the three categories, each with a cover photo and a pickup option', async () => {
+  it('creates the ACTIVE feed listings for Valentina and Tomás across the three categories, each with a cover photo and a pickup option, when the seed runs', async () => {
     const tomas = await prisma.user.findUniqueOrThrow({
       where: { email: 'tomas@renest.test' },
       select: { id: true },

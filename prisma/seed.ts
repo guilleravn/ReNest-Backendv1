@@ -139,7 +139,7 @@ async function seed(prisma: PrismaClient): Promise<void> {
   const passwordHash = await argon2.hash(readSeedPassword());
   await assertFixedUserIds(prisma);
 
-  const seeded = await prisma.$transaction([
+  const seededRows = await prisma.$transaction([
     ...CATEGORIES.map((category) =>
       prisma.category.upsert({
         where: { slug: category.slug },
@@ -167,12 +167,12 @@ async function seed(prisma: PrismaClient): Promise<void> {
   ]);
   // Tomás has no fixed id (nothing pointed at him before the feed), so read it back from the upsert.
   const categoryIdBySlug = new Map(
-    seeded.flatMap((row) =>
+    seededRows.flatMap((row) =>
       'slug' in row ? [[row.slug, row.id] as const] : [],
     ),
   );
   const userIdByEmail = new Map(
-    seeded.flatMap((row) =>
+    seededRows.flatMap((row) =>
       'email' in row ? [[row.email, row.id] as const] : [],
     ),
   );
@@ -243,7 +243,7 @@ async function seed(prisma: PrismaClient): Promise<void> {
       id: SEED_FEED_LISTING_IDS.leatherArmchair,
       pickupOptionId: SEED_FEED_PICKUP_OPTION_IDS.leatherArmchair,
       sellerId: OTHER_SELLER_ID,
-      categoryId: categoryId('furniture'),
+      categoryId: furnitureCategoryId,
       title: 'Leather armchair',
       description: 'Brown leather armchair, small scratch on the left arm.',
       condition: 'GENTLY_USED',
@@ -256,7 +256,7 @@ async function seed(prisma: PrismaClient): Promise<void> {
       id: SEED_FEED_LISTING_IDS.oakArmchair,
       pickupOptionId: SEED_FEED_PICKUP_OPTION_IDS.oakArmchair,
       sellerId: tomasId,
-      categoryId: categoryId('furniture'),
+      categoryId: furnitureCategoryId,
       title: 'Oak armchair',
       description: 'Solid oak frame with a linen cushion.',
       condition: 'LIKE_NEW',
