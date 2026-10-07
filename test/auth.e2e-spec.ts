@@ -589,7 +589,7 @@ describe('Auth (e2e)', () => {
   });
 
   // Layered limits on login and sign-up (src/auth/credentials-throttle.ts): per client IP + email
-  // (5 / 60 s), per client IP (20 / 60 s) and across all clients (100 / 60 s).
+  // (5 / 60 s) and per client IP (20 / 60 s).
   describe('Credential throttling', () => {
     const fromIp = (ip: string) => ({ 'X-Forwarded-For': ip });
 
@@ -632,22 +632,6 @@ describe('Auth (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/register')
         .set(fromIp('203.0.113.5'))
-        .send(registerBody(uniqueEmail()))
-        .expect(429);
-    });
-
-    it('returns 429 after 100 attempts across all clients when IPs and emails rotate', async () => {
-      // 10 IPs x 10 emails: below the per-IP (20) and per-IP+email (5) limits.
-      for (let ip = 0; ip < 10; ip += 1) {
-        for (let i = 0; i < 10; i += 1) {
-          await loginFrom(`198.51.100.${ip}`, uniqueEmail(), '').expect(400);
-        }
-      }
-
-      await loginFrom('198.51.100.200', uniqueEmail(), '').expect(429);
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .set(fromIp('198.51.100.201'))
         .send(registerBody(uniqueEmail()))
         .expect(429);
     });

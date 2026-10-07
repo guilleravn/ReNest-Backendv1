@@ -27,8 +27,8 @@ describe('validateEnv', () => {
       NODE_ENV: 'development',
       TRUST_PROXY: 'loopback',
       ARGON2_MAX_CONCURRENCY: 4,
+      ARGON2_MAX_QUEUE: 32,
       CREDENTIALS_IP_LIMIT: 20,
-      CREDENTIALS_GLOBAL_LIMIT: 100,
     });
   });
 
@@ -51,8 +51,8 @@ describe('validateEnv', () => {
       NODE_ENV: 'development',
       TRUST_PROXY: 'loopback',
       ARGON2_MAX_CONCURRENCY: 4,
+      ARGON2_MAX_QUEUE: 32,
       CREDENTIALS_IP_LIMIT: 20,
-      CREDENTIALS_GLOBAL_LIMIT: 100,
       UNRELATED: 'x',
     });
   });
@@ -121,27 +121,17 @@ describe('validateEnv', () => {
     },
   );
 
-  it('defaults the credential limits to 20 per IP and 100 globally', () => {
-    expect(validateEnv(REQUIRED)).toMatchObject({
-      CREDENTIALS_IP_LIMIT: 20,
-      CREDENTIALS_GLOBAL_LIMIT: 100,
-    });
+  it('defaults the credential limit to 20 per IP', () => {
+    expect(validateEnv(REQUIRED)).toMatchObject({ CREDENTIALS_IP_LIMIT: 20 });
   });
 
-  it('reads CREDENTIALS_IP_LIMIT and CREDENTIALS_GLOBAL_LIMIT as integers', () => {
+  it('reads CREDENTIALS_IP_LIMIT as an integer', () => {
     expect(
-      validateEnv({
-        ...REQUIRED,
-        CREDENTIALS_IP_LIMIT: '1000',
-        CREDENTIALS_GLOBAL_LIMIT: '1000',
-      }),
-    ).toMatchObject({
-      CREDENTIALS_IP_LIMIT: 1000,
-      CREDENTIALS_GLOBAL_LIMIT: 1000,
-    });
+      validateEnv({ ...REQUIRED, CREDENTIALS_IP_LIMIT: '1000' }),
+    ).toMatchObject({ CREDENTIALS_IP_LIMIT: 1000 });
   });
 
-  it.each(['CREDENTIALS_IP_LIMIT', 'CREDENTIALS_GLOBAL_LIMIT'])(
+  it.each(['CREDENTIALS_IP_LIMIT'])(
     'throws when %s is below 1 or not an integer',
     (name) => {
       expect(() => validateEnv({ ...REQUIRED, [name]: '0' })).toThrow(
@@ -187,8 +177,8 @@ describe('validateEnv', () => {
       NODE_ENV: 'development',
       TRUST_PROXY: 'loopback',
       ARGON2_MAX_CONCURRENCY: 4,
+      ARGON2_MAX_QUEUE: 32,
       CREDENTIALS_IP_LIMIT: 20,
-      CREDENTIALS_GLOBAL_LIMIT: 100,
     });
   });
 
@@ -232,6 +222,24 @@ describe('validateEnv', () => {
       expect(() =>
         validateEnv({ ...REQUIRED, ARGON2_MAX_CONCURRENCY }),
       ).toThrow(/ARGON2_MAX_CONCURRENCY/);
+    },
+  );
+
+  it('reads ARGON2_MAX_QUEUE as an integer, allowing 0', () => {
+    expect(validateEnv({ ...REQUIRED, ARGON2_MAX_QUEUE: '0' })).toMatchObject({
+      ARGON2_MAX_QUEUE: 0,
+    });
+    expect(validateEnv({ ...REQUIRED, ARGON2_MAX_QUEUE: '10' })).toMatchObject({
+      ARGON2_MAX_QUEUE: 10,
+    });
+  });
+
+  it.each(['-1', '2.5', 'abc'])(
+    'throws when ARGON2_MAX_QUEUE is %j',
+    (ARGON2_MAX_QUEUE) => {
+      expect(() => validateEnv({ ...REQUIRED, ARGON2_MAX_QUEUE })).toThrow(
+        /ARGON2_MAX_QUEUE/,
+      );
     },
   );
 

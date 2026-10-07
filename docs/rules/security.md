@@ -14,10 +14,11 @@ it needs a new decision.
   fake/switchable "current user".
 - **Contract** (all public except `/auth/me`; errors use the standard Nest body):
   - `POST /auth/login` `{ email, password }` → `200 { accessToken, expiresAt }`; `401`
-    `"Invalid email or password"` for both an unknown email and a wrong password; `400`; `429`.
+    `"Invalid email or password"` for both an unknown email and a wrong password; `400`; `429`;
+    `503` when the argon2 queue is full (see below).
   - `POST /auth/register` `{ fullName, email, city, phoneE164?, password }` →
     `201 { accessToken, expiresAt }` (sign-up also signs the user in); `409` `"An account with this
-    email already exists"`; `400`; `429`. `city` is one of `USER_ZONES` (served by `GET /zones`);
+    email already exists"`; `400`; `429`; `503`. `city` is one of `USER_ZONES` (served by `GET /zones`);
     `phoneE164` may be omitted, `null` or `""` (stored as NULL), otherwise separators are stripped
     and it must be E.164. New accounts start unverified. There is no terms checkbox: it was removed
     (BO-39 review) until real Terms/Privacy content exists, so `acceptedTerms` is now an unknown
@@ -49,37 +50,59 @@ it needs a new decision.
   would let any client pick its own IP. `docker-compose.yml` sets `loopback, uniquelocal` because
   requests reach the container from the Docker bridge. Every per-IP limit below depends on this
   setting **and** on the frontend forwarding `X-Forwarded-For`; without them all users share the
-  Next server's IP.
+  Next server's IP. See [Deployment prerequisite: trusted proxy](#deployment-prerequisite-trusted-proxy).
 - **Throttling** (`@nestjs/throttler`, named throttlers, global `ThrottlerGuard` registered
   before the JWT guard so unauthenticated requests count too; counters in memory, one API
   instance):
   - `default`, every route: `THROTTLE_LIMIT` requests per `THROTTLE_TTL_MS` per client IP
     (defaults 1000 / 60 s). A coarse safety net.
-  - Login and sign-up (`@CredentialsThrottle()`) additionally get three layered limits, **all
+  - Login and sign-up (`@CredentialsThrottle()`) additionally get two layered limits, **all
     applied together** and shared by both routes (`src/auth/credentials-throttle.ts`):
     1. per client IP + normalized email, 5 / 60 s (fixed): slows guessing one account's password;
     2. per client IP, `CREDENTIALS_IP_LIMIT` / 60 s (default 20): stops one client from rotating
        emails;
-    3. across all clients (one fixed key), `CREDENTIALS_GLOBAL_LIMIT` / 60 s (default 100): caps
-       argon2 work and account creation
-       even when an attacker rotates both emails and IPs. It can also block legitimate logins
-       for up to a minute during such an attack; accepted for the MVP's traffic.
-  - Limits 2 and 3 are configurable only so the local Docker stack (`docker-compose.yml`, 1000
-    each) can serve the frontend's e2e suite, whose requests all come from one client IP. Every
-    other environment, production included, keeps the defaults. Limit 1 stays fixed.
+  - There is deliberately **no limit shared by all clients**: a single counter would let an
+    attacker with a handful of IPs (or IPv6 /64s) lock every user out of login and sign-up.
+    Resource exhaustion from argon2 is handled in `PasswordHasher` instead (next bullet).
+  - Limit 2 is configurable only so the local Docker stack (`docker-compose.yml`, 1000) can serve
+    the frontend's e2e suite, whose requests all come from one client IP. Every other environment,
+    production included, keeps the default. Limit 1 stays fixed.
+  - 20 / min per IP may be tight behind carrier-grade NAT (common on LatAm mobile networks, where
+    many users share one IP): monitor 429s on login/sign-up after the first deploy.
   - The credential throttlers use `skipIf` so they never apply to other routes, and the
     `default` throttler is never overridden on credential routes.
   - **Remaining lockout trade-off**: keying by IP + email means an attacker elsewhere cannot lock
     a victim out, but one sharing the victim's IP (same NAT, office or mobile carrier) can, for
     up to 60 s.
-- **argon2 concurrency**: every hash/verify (including the dummy verify) goes through
-  `PasswordHasher`, which runs at most `ARGON2_MAX_CONCURRENCY` (default 4) at once and queues the
-  rest, so a burst cannot exhaust memory (~64 MiB each) or CPU.
+- **argon2 concurrency and queue**: every hash/verify (including the dummy verify) goes through
+  `PasswordHasher`, which runs at most `ARGON2_MAX_CONCURRENCY` (default 4) at once and lets at
+  most `ARGON2_MAX_QUEUE` (default 32) callers wait for a permit. When the queue is full the call
+  fails immediately with `ServerBusyException` (503 "Server is busy, try again shortly"), so a
+  burst cannot exhaust memory (~64 MiB each), CPU or request latency. This, not a global
+  throttler, is the answer to distributed floods. Trade-off: while a flood keeps the queue full,
+  legitimate logins also get 503; unlike a global counter, they recover as soon as it stops.
 - **Placeholder secret**: with `NODE_ENV=production` the app refuses to start if `JWT_SECRET` is
   the `.env.example` placeholder.
 - **Swappable boundary**: only `AuthModule` knows how users authenticate. The rest of the code
   depends on the global guard, `@Public()` and `@CurrentUser()` (in `src/common/decorators/`), so
   moving to an external provider only replaces `AuthModule`.
+
+### Deployment prerequisite: trusted proxy
+
+**Not implemented; decide the topology before the first deploy.** The per-IP limits are only as
+good as the client IP behind them.
+
+- `TRUST_PROXY` must match the Next.js server exactly (its IP/CIDR, or the exact hop count).
+- With the default `loopback` in a split deployment (API and Next.js on different hosts), every
+  user shares the Next server's IP, so the per-IP limit (20 / min) produces legitimate 429s.
+- On Vercel the egress IPs are dynamic, so address-based trust cannot work. The planned fix is to
+  authenticate the forwarded IP with a shared-secret header sent by the Next server and checked by
+  the API, instead of trusting an address.
+- The frontend must sit behind a proxy that overwrites or appends `X-Forwarded-For`. A self-hosted
+  Next.js reachable directly lets clients choose their own IP.
+- Carrier-grade NAT (see the per-IP limit above) can still make 20 / min tight on mobile networks.
+- E2E is not in CI (team decision), so none of this is exercised automatically: it must be
+  verified by hand in the first deployed environment.
 
 ## Security invariants
 
@@ -87,6 +110,7 @@ These rules apply from the auth slice (A9) onwards. Entry format: see
 [business-invariants.md](business-invariants.md#format).
 
 ### Passwords are never stored in plain text
+
 - **Requires**: hash with a slow password hash (argon2 or bcrypt) before persisting; the hash never appears in any API response.
 - **Protects**: user credentials if the DB leaks.
 - **Fails as**: leaked DB → every user's password exposed.
@@ -94,6 +118,7 @@ These rules apply from the auth slice (A9) onwards. Entry format: see
   `test/seed.e2e-spec.ts` (seeded accounts).
 
 ### Tokens are signed with a secret from the environment
+
 - **Requires**: JWT secret and expiry read from env (`.env`, never committed); expiry as agreed in
   [Auth design](#auth-design-mvp).
 - **Protects**: nobody can forge a valid token.
@@ -102,6 +127,7 @@ These rules apply from the auth slice (A9) onwards. Entry format: see
   in production).
 
 ### Protected routes require a valid token
+
 - **Requires**: auth guard on every non-public route; public routes are explicitly marked.
 - **Protects**: data and actions are only reachable by authenticated users.
 - **Fails as**: anonymous access to user data or actions.
@@ -109,11 +135,13 @@ These rules apply from the auth slice (A9) onwards. Entry format: see
   expired, deleted user).
 
 ### Ownership is checked in the service
+
 - **Requires**: services verify the current user owns (or may act on) the resource before reading/changing it.
 - **Protects**: users cannot read or modify other users' resources by changing an ID.
 - **Fails as**: IDOR: user A edits or deletes user B's data.
 
 ### Phone numbers are only exposed where a story needs them
+
 - **Requires**: response DTOs with an explicit `select`. The seller's `phoneE164` is returned with
   the listing detail / seller snapshot (WhatsApp contact, B5) and may be `null` (the client shows
   the fallback). The buyer's `phoneE164` is returned only to the seller of that buyer's
@@ -122,6 +150,7 @@ These rules apply from the auth slice (A9) onwards. Entry format: see
 - **Fails as**: any authenticated user harvests buyers' phone numbers through the API.
 
 ### All input is validated and unknown fields are rejected
+
 - **Requires**: global `ValidationPipe` with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true` (registered as `APP_PIPE` in `AppModule`), and DTOs with `class-validator` decorators.
 - **Protects**: services only receive well-formed, expected input; clients cannot set fields like `id`, `role` or `sellerId`.
 - **Fails as**: mass assignment (e.g. a user sets `role: "admin"`) or crashes on malformed input.

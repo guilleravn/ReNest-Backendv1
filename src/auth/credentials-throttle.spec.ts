@@ -77,11 +77,10 @@ describe('trackByIpAndEmail', () => {
 
 const CREDENTIALS_THROTTLERS = credentialsThrottlers({
   ipLimit: 20,
-  globalLimit: 100,
 });
 
 describe('credentialsThrottlers', () => {
-  it('defines the three layered limits over the same window', () => {
+  it('defines the two layered limits over the same window', () => {
     expect(
       CREDENTIALS_THROTTLERS.map(({ name, limit, ttl }) => ({
         name,
@@ -99,30 +98,14 @@ describe('credentialsThrottlers', () => {
         limit: 20,
         ttl: CREDENTIALS_THROTTLE_TTL_MS,
       },
-      {
-        name: 'credentials-global',
-        limit: 100,
-        ttl: CREDENTIALS_THROTTLE_TTL_MS,
-      },
     ]);
     expect(CREDENTIALS_IP_EMAIL_LIMIT).toBe(5);
   });
 
-  it('uses the configured per-IP and global limits and keeps per IP + email at 5', () => {
+  it('uses the configured per-IP limit and keeps per IP + email at 5', () => {
     expect(
-      credentialsThrottlers({ ipLimit: 1000, globalLimit: 2000 }).map(
-        ({ limit }) => limit,
-      ),
-    ).toEqual([5, 1000, 2000]);
-  });
-
-  it('tracks the global limiter with one key for every client', () => {
-    const global = CREDENTIALS_THROTTLERS[2];
-    const context = contextFor(() => undefined);
-
-    expect(global.getTracker?.({ ip: '10.0.0.1' }, context)).toBe(
-      global.getTracker?.({ ip: '10.0.0.2' }, context),
-    );
+      credentialsThrottlers({ ipLimit: 1000 }).map(({ limit }) => limit),
+    ).toEqual([5, 1000]);
   });
 
   it('shares keys between login and sign-up (the key ignores the route)', () => {

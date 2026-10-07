@@ -13,6 +13,20 @@ Format:
 
 ---
 
+## 2026-10-07 · A9 / BO-39 (review follow-up) · backend-issue-implementer
+
+- Supersedes the earlier notes about the global credentials limit: the credentials-global throttler
+  and `CREDENTIALS_GLOBAL_LIMIT` are gone (a shared counter let a few IPs lock everyone out).
+  Remaining: per IP+email 5 (fixed), per IP `CREDENTIALS_IP_LIMIT` (20), and the `default` one.
+- argon2 resource exhaustion is bounded in `PasswordHasher`: new `ARGON2_MAX_QUEUE` (default 32 =
+  8x concurrency, about one second of waiting) caps waiting callers; beyond it `ServerBusyException`
+  (503) is thrown at once. Unit-tested only; an e2e would need to hold argon2 open, which is not
+  deterministic.
+- Trusted-proxy prerequisite documented (not implemented) in `docs/rules/security.md` and
+  `architecture.md` "Production target": topology must be decided before the first deploy.
+- Backlog: a structured error code for field validation. The frontend currently maps `city` 400s
+  by Nest's message prefix, which breaks if the message changes.
+
 ## 2026-10-06 · A9 / BO-39 (configurable credential limits) · backend-issue-implementer
 
 - The per-IP (20) and global (100) login/sign-up limits are now env vars
@@ -90,7 +104,7 @@ Format:
 ## 2026-10-06 · A9 (auth) · backend-issue-implementer
 
 - Per-email throttling uses the library's per-route tracker (`@Throttle({ default: { limit,
-  ttl, getTracker } })`, `src/auth/credentials-throttle.ts`) instead of a custom guard subclass
+ttl, getTracker } })`, `src/auth/credentials-throttle.ts`) instead of a custom guard subclass
   overriding `getTracker`: same behavior, no extra guard. On login/register it **replaces** the
   global per-IP limit (it does not stack), and login and register count separately (the key
   includes the handler).
@@ -111,6 +125,7 @@ Format:
 - Docs also updated beyond the brief's list: `docs/conventions/testing.md` (said "no sign-up").
 
 ## 2026-10-06 · BO-40 (PR #7 review fixes) · backend-qa-reviewer
+
 - The current-seller stub is now the `@CurrentUser()` param decorator in
   `src/auth/current-user.decorator.ts` (the boundary security.md defines); `CurrentSellerProvider`
   is gone. BO-39 only swaps the decorator body and adds the global guard.
@@ -124,6 +139,7 @@ Format:
 - Seed gaps that wait for the reservations slice are listed in `docs/known-deviations.md`.
 
 ## 2026-10-06 · BO-40 (post-merge re-review) · backend-qa-reviewer
+
 - After the BO-36 merge, `test/seed.e2e-spec.ts` runs the seed (which now recreates the current
   seller's listings) while `test/listings.e2e-spec.ts` clears them and asserts the COMPLETED tab
   is empty: a race between files. `vitest.config.e2e.ts` now sets `fileParallelism: false`, so
@@ -132,6 +148,7 @@ Format:
   chair, $12,000 bookshelf, $5,000 lamp. Lower them when the seed is next touched (demo data only).
 
 ## 2026-10-06 · BO-40 · backend-qa-reviewer
+
 - `GET /listings` has no pagination params (`page`/`pageSize`): the sub-issue's contract is
   `{ data, meta: { total } }` only, and `ListingsService.findAllForSeller` hardcodes
   `take: DEFAULT_LISTINGS_TAKE` (20). A seller with more than 20 listings in one status will

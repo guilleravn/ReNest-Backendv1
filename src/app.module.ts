@@ -33,9 +33,6 @@ export const DEFAULT_THROTTLER = 'default';
           // Only routes marked @CredentialsThrottle() (login, sign-up); they stack on the default.
           ...credentialsThrottlers({
             ipLimit: config.get('CREDENTIALS_IP_LIMIT', { infer: true }),
-            globalLimit: config.get('CREDENTIALS_GLOBAL_LIMIT', {
-              infer: true,
-            }),
           }),
         ],
       }),

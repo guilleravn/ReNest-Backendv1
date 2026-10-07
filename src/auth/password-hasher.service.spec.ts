@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 
 import { EnvironmentVariables } from '../config/env.validation.js';
+import { ServerBusyException } from './exceptions/server-busy.exception.js';
 import { PasswordHasher } from './password-hasher.service.js';
 
 // Real argon2, with `hash` wrapped in a spy so concurrency can be observed.
@@ -10,11 +11,11 @@ vi.mock('argon2', async (importOriginal) => {
   return { ...actual, hash: vi.fn(actual.hash) };
 });
 
-const configWith = (maxConcurrency: number) =>
-  ({ get: () => maxConcurrency }) as unknown as ConfigService<
-    EnvironmentVariables,
-    true
-  >;
+const configWith = (maxConcurrency: number, maxQueue = 32) =>
+  ({
+    get: (key: string) =>
+      key === 'ARGON2_MAX_QUEUE' ? maxQueue : maxConcurrency,
+  }) as unknown as ConfigService<EnvironmentVariables, true>;
 
 describe('PasswordHasher', () => {
   beforeEach(async () => {
@@ -62,6 +63,42 @@ describe('PasswordHasher', () => {
 
       await expect(hasher.hash('password-1')).rejects.toBe(error);
       await expect(hasher.hash('password-2')).resolves.toMatch(/^\$argon2id\$/);
+    });
+  });
+
+  describe('when the queue is full', () => {
+    it('rejects with a 503 ServerBusyException without running argon2, then recovers', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((done) => {
+        release = done;
+      });
+      vi.mocked(argon2.hash).mockImplementation(async () => {
+        await gate;
+        return '$argon2id$fake';
+      });
+      const hasher = new PasswordHasher(configWith(1, 1));
+
+      const running = hasher.hash('password-1');
+      const queued = hasher.hash('password-2');
+      await new Promise<void>((done) => setImmediate(done));
+
+      const rejected = hasher.verify('hash', 'password-3');
+      await expect(rejected).rejects.toBeInstanceOf(ServerBusyException);
+      await expect(rejected).rejects.toMatchObject({
+        status: 503,
+        message: 'Server is busy, try again shortly',
+      });
+      expect(argon2.hash).toHaveBeenCalledTimes(1);
+
+      release();
+      await expect(Promise.all([running, queued])).resolves.toEqual([
+        '$argon2id$fake',
+        '$argon2id$fake',
+      ]);
+      expect(argon2.hash).toHaveBeenCalledTimes(2);
+
+      // Permits and queue slots were released: a new call runs normally.
+      await expect(hasher.hash('password-4')).resolves.toBe('$argon2id$fake');
     });
   });
 

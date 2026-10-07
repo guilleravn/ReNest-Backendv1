@@ -10,24 +10,21 @@ export const CREDENTIALS_THROTTLE_TTL_MS = 60_000;
 /** Per client IP + email: slows guessing one account's password. Fixed on purpose. */
 export const CREDENTIALS_IP_EMAIL_LIMIT = 5;
 
+// There is deliberately no limit shared by all clients: one counter would let a few IPs lock every
+// user out. Argon2 resource exhaustion is bounded in `PasswordHasher` (concurrency + queue) instead.
+
 /**
- * The two configurable limits (env `CREDENTIALS_IP_LIMIT` / `CREDENTIALS_GLOBAL_LIMIT`, defaults
- * 20 and 100):
- * - `ipLimit`, per client IP: stops one client from rotating emails;
- * - `globalLimit`, all clients together: caps argon2 work (CPU/memory) and account creation even
- *   when an attacker rotates both emails and IPs.
+ * The configurable limit (env `CREDENTIALS_IP_LIMIT`, default 20): per client IP, stops one client
+ * from rotating emails.
  */
 export interface CredentialsThrottleLimits {
   ipLimit: number;
-  globalLimit: number;
 }
 
 export const CREDENTIALS_IP_EMAIL_THROTTLER = 'credentials-ip-email';
 export const CREDENTIALS_IP_THROTTLER = 'credentials-ip';
-export const CREDENTIALS_GLOBAL_THROTTLER = 'credentials-global';
 
 export const IS_CREDENTIALS_ROUTE_KEY = 'isCredentialsRoute';
-const GLOBAL_TRACKER = 'all';
 const UNKNOWN_IP = 'unknown';
 
 /** Marks a route as a credentials route, so the credential throttlers apply to it. */
@@ -97,7 +94,6 @@ const credentialsThrottler = (
 
 export function credentialsThrottlers({
   ipLimit,
-  globalLimit,
 }: CredentialsThrottleLimits): ThrottlerOptions[] {
   return [
     credentialsThrottler(
@@ -106,10 +102,5 @@ export function credentialsThrottlers({
       trackByIpAndEmail,
     ),
     credentialsThrottler(CREDENTIALS_IP_THROTTLER, ipLimit, trackByIp),
-    credentialsThrottler(
-      CREDENTIALS_GLOBAL_THROTTLER,
-      globalLimit,
-      () => GLOBAL_TRACKER,
-    ),
   ];
 }
