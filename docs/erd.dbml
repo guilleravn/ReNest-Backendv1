@@ -1,4 +1,4 @@
-// ReNest — MVP R1 "The Handshake" (Epics 1–5 + login)
+// ReNest — MVP R1 "The Handshake" (Epics 1–5 + login and sign-up)
 // Postgres · own auth: email + password (argon2/bcrypt hash) → single JWT access token (no refresh tokens, see security.md)
 // Paste into https://dbdiagram.io to render the diagram.
 //
@@ -39,11 +39,11 @@ Enum weekday {
 
 Table users {
   id            uuid [pk]
-  email         varchar(255) [not null, unique]
+  email         varchar(255) [not null, unique, note: 'Stored trimmed + lowercased (normalized by the auth DTOs). UNIQUE → one account per email; P2002 on sign-up → 409']
   password_hash varchar(255) [not null, note: 'argon2/bcrypt hash. Never returned by the API or logged']
   full_name     varchar(120) [not null]
   phone_e164    varchar(20)  [note: 'Nullable → WhatsApp fallback "can\'t be reached this way". Exposure rules: security.md']
-  city          varchar(100) [not null, note: 'PUBLIC. Shown as the listing location on cards and detail (sellers have no per-listing area field)']
+  city          varchar(100) [not null, note: 'PUBLIC. Shown as the listing location on cards and detail (sellers have no per-listing area field). One of USER_ZONES (src/users/user-zones.ts), enforced by the sign-up DTO']
   is_verified   boolean [not null, default: false, note: 'Set manually by the ReNest team']
   verified_at   timestamptz
   created_at    timestamptz [not null, default: `now()`]

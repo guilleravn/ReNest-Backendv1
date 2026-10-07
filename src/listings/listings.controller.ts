@@ -2,7 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import {
   CurrentUser,
   type CurrentUserPayload,
-} from '../auth/current-user.decorator.js';
+} from '../common/decorators/current-user.decorator.js';
 import { ListListingsQueryDto } from './dto/list-listings-query.dto.js';
 import type { ListListingsResponseDto } from './dto/listing-response.dto.js';
 import { ListingsService } from './listings.service.js';

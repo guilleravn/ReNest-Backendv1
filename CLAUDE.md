@@ -16,7 +16,7 @@ Spanish.
 
 ```bash
 npm install
-cp .env.example .env         # local config; never commit .env
+cp .env.example .env         # local config (DB, JWT_SECRET…); never commit .env
 
 npm run db:up                # start local Postgres (Docker)
 npm run db:down              # stop it

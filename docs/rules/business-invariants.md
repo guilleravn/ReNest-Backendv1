@@ -128,6 +128,29 @@ The rules below are **agreed** (MVP scope). **Requires** names the mechanism def
   country.
 - **Tested by**: DB level: `test/database-constraints.e2e-spec.ts` (listings). API level: TBD (A1).
 
+### One account per email
+- **Requires**: emails are trimmed and lowercased by the DTOs before they reach the service (login
+  and sign-up), and `users.email UNIQUE` is the guard: sign-up inserts directly (no
+  check-then-insert) and `UsersService.create` maps the unique violation (P2002) to `409` (`EmailAlreadyRegisteredException`),
+  so two concurrent sign-ups with the same email cannot both succeed.
+- **Protects**: one person ↔ one account; login by email is unambiguous.
+- **Fails as**: duplicate accounts for the same email (or `Ana@x.com` vs `ana@x.com`), and logins
+  that land on the wrong one.
+- **Tested by**: `test/auth.e2e-spec.ts` (`POST /auth/register`: duplicate email in another case →
+  409; two concurrent sign-ups → one 201, one 409); `src/users/users.service.spec.ts` (P2002 → 409).
+
+### A user's city is one of the fixed zones
+- **Requires**: `RegisterDto.city` with `@IsIn(USER_ZONES)` (`src/users/user-zones.ts`); the seed
+  uses the same list (typed against it), and the frontend reads it from `GET /zones`, so there is
+  one copy. No DB constraint: the list is expected to change with
+  the product and lives in code.
+- **Protects**: the city shown as the listing location on cards and detail is consistent and
+  filterable, not free text.
+- **Fails as**: misspelled or invented cities on listings.
+- **Tested by**: `src/auth/dto/register.dto.spec.ts`, `test/auth.e2e-spec.ts` (`returns 400 when
+  the city is not one of the zones`, `serves GET /zones…`), `test/seed.e2e-spec.ts` (seeded
+  accounts).
+
 Decided 2026-10-06: every price is in USD, whatever the country of the seller or buyer (confirmed
 by the product owner); `description` is optional (NULL when not given).
 

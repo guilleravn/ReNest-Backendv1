@@ -12,6 +12,7 @@ import {
 } from '../prisma/seed-fixtures.js';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import { USER_ZONES, type UserZone } from '../src/users/user-zones.js';
 
 const SEED_SLUGS = ['electronics', 'furniture', 'home'];
 const SEED_EMAILS = [
@@ -87,6 +88,18 @@ describe('Seed (e2e)', () => {
         isVerified: false,
       },
     ]);
+  });
+
+  it('gives every account a city from the zones list', async () => {
+    const users = await prisma.user.findMany({
+      where: { email: { in: SEED_EMAILS } },
+      select: { city: true },
+    });
+
+    expect(users).toHaveLength(SEED_EMAILS.length);
+    for (const { city } of users) {
+      expect(USER_ZONES).toContain(city as UserZone);
+    }
   });
 
   it('sets verifiedAt only on the verified account', async () => {

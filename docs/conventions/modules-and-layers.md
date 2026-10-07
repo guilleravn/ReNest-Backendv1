@@ -10,7 +10,7 @@ DTO/validation details live in [api-design.md](api-design.md); Prisma details in
 src/
   main.ts                    # bootstrap only
   app.module.ts
-  common/                    # (proposal) cross-cutting: decorators/, filters/, guards/, interceptors/, pipes/
+  common/                    # cross-cutting, used by every module: decorators/ (@Public, @CurrentUser), concurrency/ (Semaphore); filters/, guards/, interceptors/, pipes/ when needed
   config/
     env.validation.ts        # EnvironmentVariables + validateEnv (ConfigModule fails fast at startup)
   prisma/
@@ -43,11 +43,16 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 |---|---|---|
 | `app` | — (scaffold health/root endpoint) | Exists (Nest scaffold) |
 | `prisma` | — (`PrismaService`, DB connection) | Exists |
-| `users` | `User` | Planned: login story (`AuthModule` reads users through `UsersService`) |
-| `auth` | — (JWT issuing/verification only) | Only a `@CurrentUser()` stub (`src/auth/current-user.decorator.ts`) that returns the seeded seller until the login story (BO-39) adds the guard and JWT. Design in [security.md](../rules/security.md#auth-design-mvp) |
+| `users` | `User` | Exists (A9). `UsersService` is the only code that touches `prisma.user`; `AuthModule` uses it. Also owns the zones list (`USER_ZONES`, a user's city) and serves it with `ZonesController` (`GET /zones`, no service: it returns a constant) |
+| `auth` | — (login, sign-up, JWT issuing/verification, global `JwtAuthGuard`) | Exists (A9). Design in [security.md](../rules/security.md#auth-design-mvp) |
 | `categories` | `Category` | Planned: A1 (`GET /categories`) |
 | `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Exists: `GET /listings?status=&page=&pageSize=` (the current seller's listings, BO-27). `POST /listings` (A1) still planned |
 | *(domain modules)* | TBD | Added as features are agreed |
+
+`@Public()` and `@CurrentUser()` live in `src/common/decorators/`, not in `auth/`: every module
+uses them, and keeping them out of `AuthModule` is what makes it replaceable (see
+[security.md](../rules/security.md#auth-design-mvp)). The guard that fills `request.user` stays in
+`auth/`.
 
 Update this table in the same commit that adds a module or a model. `prisma/seed.ts` and test
 fixtures are outside Nest and may write any model directly.
