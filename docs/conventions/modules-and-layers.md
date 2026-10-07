@@ -10,7 +10,10 @@ DTO/validation details live in [api-design.md](api-design.md); Prisma details in
 src/
   main.ts                    # bootstrap only
   app.module.ts
-  common/                    # cross-cutting, used by every module: decorators/ (@Public, @CurrentUser), concurrency/ (Semaphore); filters/, guards/, interceptors/, pipes/ when needed
+  common/                    # cross-cutting, no domain and no Prisma models: decorators/ (@Public, @CurrentUser), concurrency/ (Semaphore), pagination/; filters/, guards/, interceptors/, pipes/ when needed
+    pagination/
+      pagination-query.dto.ts  # PaginationQueryDto (page, pageSize) + DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_PAGE; list query DTOs extend it
+      pagination.ts            # PageParams, Paginated<T> ({ data, meta: { page, pageSize, total } }), toSkipTake() → Prisma skip/take
   config/
     env.validation.ts        # EnvironmentVariables + validateEnv (ConfigModule fails fast at startup)
   prisma/
@@ -46,7 +49,7 @@ never query its tables directly (❌ `prisma.<otherModulesModel>`).
 | `users` | `User` | Exists (A9). `UsersService` is the only code that touches `prisma.user`; `AuthModule` uses it. Also owns the zones list (`USER_ZONES`, a user's city) and serves it with `ZonesController` (`GET /zones`, no service: it returns a constant) |
 | `auth` | — (login, sign-up, JWT issuing/verification, global `JwtAuthGuard`) | Exists (A9). Design in [security.md](../rules/security.md#auth-design-mvp) |
 | `categories` | `Category` | Planned: A1 (`GET /categories`) |
-| `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Exists: `GET /listings?status=&page=&pageSize=` (the current seller's listings, BO-27). `POST /listings` (A1) still planned |
+| `listings` | `Listing`, `ListingPhoto`, `PickupOption` | Exists: `GET /listings?status=&page=&pageSize=` (the current seller's listings, BO-27) and `GET /feed?q=&page=&pageSize=` (every ACTIVE listing, title search, BO-5; `FeedController` in the same module). `POST /listings` (A1) still planned |
 | *(domain modules)* | TBD | Added as features are agreed |
 
 `@Public()` and `@CurrentUser()` live in `src/common/decorators/`, not in `auth/`: every module

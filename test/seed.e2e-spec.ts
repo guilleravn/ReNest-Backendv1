@@ -7,6 +7,7 @@ import * as argon2 from 'argon2';
 
 import {
   OTHER_SELLER_ID,
+  SEED_FEED_LISTING_IDS,
   SEED_LISTING_IDS,
   SEEDED_SELLER_ID,
 } from '../prisma/seed-fixtures.js';
@@ -178,5 +179,76 @@ describe('Seed (e2e)', () => {
       expected(SEED_LISTING_IDS.completed, SEEDED_SELLER_ID, 'COMPLETED'),
       expected(SEED_LISTING_IDS.otherSellerActive, OTHER_SELLER_ID, 'ACTIVE'),
     ]);
+  });
+
+  it('creates the ACTIVE feed listings for Valentina and Tomás across the three categories, each with a cover photo and a pickup option, when the seed runs', async () => {
+    const tomas = await prisma.user.findUniqueOrThrow({
+      where: { email: 'tomas@renest.test' },
+      select: { id: true },
+    });
+    const listings = await prisma.listing.findMany({
+      where: { id: { in: Object.values(SEED_FEED_LISTING_IDS) } },
+      select: {
+        id: true,
+        title: true,
+        sellerId: true,
+        status: true,
+        category: { select: { slug: true } },
+        photos: { select: { position: true } },
+        _count: { select: { pickupOptions: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    const expected = (
+      id: string,
+      title: string,
+      sellerId: string,
+      categorySlug: string,
+    ) => ({
+      id,
+      title,
+      sellerId,
+      status: 'ACTIVE',
+      category: { slug: categorySlug },
+      photos: [{ position: 0 }],
+      _count: { pickupOptions: 1 },
+    });
+    expect(listings).toEqual([
+      expected(
+        SEED_FEED_LISTING_IDS.leatherArmchair,
+        'Leather armchair',
+        OTHER_SELLER_ID,
+        'furniture',
+      ),
+      expected(
+        SEED_FEED_LISTING_IDS.oakArmchair,
+        'Oak armchair',
+        tomas.id,
+        'furniture',
+      ),
+      expected(
+        SEED_FEED_LISTING_IDS.deskLamp,
+        'Desk lamp',
+        OTHER_SELLER_ID,
+        'home',
+      ),
+      expected(SEED_FEED_LISTING_IDS.floorLamp, 'Floor lamp', tomas.id, 'home'),
+      expected(
+        SEED_FEED_LISTING_IDS.bluetoothSpeaker,
+        'Bluetooth speaker',
+        OTHER_SELLER_ID,
+        'electronics',
+      ),
+      expected(
+        SEED_FEED_LISTING_IDS.deskMonitor,
+        'Desk monitor 24 inch',
+        tomas.id,
+        'electronics',
+      ),
+    ]);
+    expect(listings.map((listing) => listing.sellerId)).not.toContain(
+      SEEDED_SELLER_ID,
+    );
   });
 });

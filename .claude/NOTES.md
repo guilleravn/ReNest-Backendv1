@@ -13,6 +13,43 @@ Format:
 
 ---
 
+## 2026-10-07 · BO-42 (merge of develop with A9 / BO-39) · main session
+- A9 added the global JWT guard, so `GET /feed` now requires a token like `GET /listings` (not
+  `@Public()`: unauthenticated users are redirected to login). `test/feed.e2e-spec.ts` signs a JWT
+  for `SEEDED_SELLER_ID` (now imported from `prisma/seed-fixtures.ts`, since
+  `src/auth/current-user.decorator.ts` is gone) and covers the 401 without a token.
+- `known-deviations.md`: the `@CurrentUser()` stub entry is gone (A9 replaced it); the `photoUrl`
+  and `/feed` route entries stay. `modules-and-layers.md` lists A9's `common/decorators/` and
+  `concurrency/` next to BO-5's `common/pagination/`.
+
+## 2026-10-07 · BO-42 (PR #9 review fixes) · backend-issue-implementer
+- Agreed with BO-6 (Adriel, PR #10): BO-5 merges first and its `GET /feed` contract is the base
+  (`?q=` as the search param, `category { slug, name }`, `publishedAt desc, id desc` order). BO-6
+  rebases on top, adding the `category` (slug) filter and `GET /categories`. No category filter
+  here.
+- `q` with a control character (`\u0000`-`\u001F`, `\u007F`) is now a `400` from `@Matches` on
+  `ListFeedQueryDto`: a NUL used to reach Postgres and come back as a raw Prisma `500`.
+- Pagination moved to `src/common/pagination/` (`PaginationQueryDto`, `PageParams`,
+  `Paginated<T>`, `toSkipTake`); `common/` is no longer a proposal in modules-and-layers.md.
+  Both list methods share `COVER_PHOTO_SELECT` + `coverPhotoUrl`. The `/listings` and `/feed`
+  JSON is unchanged (only the key order inside each item may differ, which JSON does not define).
+- `/feed`'s singular route is recorded in `docs/known-deviations.md` (deliberate).
+- The blank-`q` feed e2e no longer asks for `pageSize=100`: it checks `meta.total` against the DB's
+  ACTIVE count and the order of the first page, so it holds with any number of ACTIVE rows.
+- Follow-ups outside this PR: accent-insensitive search (`unaccent`) and the feed pagination UI.
+
+## 2026-10-06 · BO-42 (B1 · GET /feed) · backend-issue-implementer
+- Verified with an e2e test: Prisma passes `contains` + `mode: 'insensitive'` to `ILIKE` **without
+  escaping** `%`/`_`. `ListingsService.findFeed` escapes `\`, `%` and `_` with a backslash
+  (`escapeLikePattern`, Postgres' default LIKE escape) so all three match literally.
+- Tomás has no fixed id (only Samuel/Valentina do), so the seed reads his id back from the user
+  upsert instead of adding a fixed one: a fixed id would make `assertFixedUserIds` fail on every
+  DB seeded before. The seed e2e looks him up by email.
+- Feed seed listings have fixed `publishedAt` values (2026-10-01..06) for a stable demo order;
+  the BO-40 listings keep the column default (`now()`), so they show first in the feed.
+- `q` sent twice (`?q=a&q=b`) arrives as an array and is rejected with `400` by `@IsString()`.
+- `test/feed.e2e-spec.ts` scopes every search with a per-run token at the end of its fixture
+  titles, since the feed is global and the seed's ACTIVE listings share the database.
 ## 2026-10-07 · A9 / BO-39 (review follow-up) · backend-issue-implementer
 
 - Supersedes the earlier notes about the global credentials limit: the credentials-global throttler
